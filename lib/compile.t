@@ -58,6 +58,57 @@ struct ClipState   { count: int32 }
 struct ScrollState { _pad: uint8 }
 struct StubCmd     { seq: int32 }
 
+struct RectCmd {
+    x: float; y: float; w: float; h: float
+    color: Color
+    opacity: float
+    z: float
+    seq: uint32
+}
+
+struct BorderCmd {
+    x: float; y: float; w: float; h: float
+    left: float; top: float; right: float; bottom: float
+    color: Color
+    opacity: float
+    z: float
+    seq: uint32
+}
+
+struct TextCmd {
+    x: float; y: float; w: float; h: float
+    text: rawstring
+    font_id: rawstring
+    font_size: float
+    letter_spacing: float
+    line_height: float
+    color: Color
+    z: float
+    seq: uint32
+}
+
+struct ImageCmd {
+    x: float; y: float; w: float; h: float
+    image_id: rawstring
+    tint: Color
+    z: float
+    seq: uint32
+}
+
+struct ScissorCmd {
+    is_begin: bool
+    x0: float; y0: float; x1: float; y1: float
+    z: float
+    seq: uint32
+}
+
+struct CustomCmd {
+    x: float; y: float; w: float; h: float
+    kind: rawstring
+    z: float
+    seq: uint32
+}
+
 local function vtype_to_terra(vt)
     if     vt == Decl.TBool   then return bool
     elseif vt == Decl.TNumber then return float
@@ -109,6 +160,17 @@ function CompileCtx.new(plan_component)
     local scroll_state_t = ScrollState
     local node_count     = #pc.nodes
 
+    local rect_cap = 0
+    local border_cap = 0
+    for _, p in ipairs(pc.paints) do
+        if p.background then rect_cap = rect_cap + 1 end
+        if p.border then border_cap = border_cap + 1 end
+    end
+    local text_cap = #pc.texts
+    local image_cap = #pc.images
+    local scissor_cap = #pc.clips * 2
+    local custom_cap = #pc.customs
+
     local frame_t = terralib.types.newstruct("Frame")
     frame_t.entries:insert({ field = "params",      type = params_t })
     frame_t.entries:insert({ field = "state",       type = state_t })
@@ -121,6 +183,18 @@ function CompileCtx.new(plan_component)
     frame_t.entries:insert({ field = "action_node", type = int32 })
     frame_t.entries:insert({ field = "action_name", type = rawstring })
     frame_t.entries:insert({ field = "cursor_name", type = rawstring })
+    frame_t.entries:insert({ field = "rects",         type = RectCmd[math.max(rect_cap, 1)] })
+    frame_t.entries:insert({ field = "rect_count",    type = int32 })
+    frame_t.entries:insert({ field = "borders",       type = BorderCmd[math.max(border_cap, 1)] })
+    frame_t.entries:insert({ field = "border_count",  type = int32 })
+    frame_t.entries:insert({ field = "texts",         type = TextCmd[math.max(text_cap, 1)] })
+    frame_t.entries:insert({ field = "text_count",    type = int32 })
+    frame_t.entries:insert({ field = "images",        type = ImageCmd[math.max(image_cap, 1)] })
+    frame_t.entries:insert({ field = "image_count",   type = int32 })
+    frame_t.entries:insert({ field = "scissors",      type = ScissorCmd[math.max(scissor_cap, 1)] })
+    frame_t.entries:insert({ field = "scissor_count", type = int32 })
+    frame_t.entries:insert({ field = "customs",       type = CustomCmd[math.max(custom_cap, 1)] })
+    frame_t.entries:insert({ field = "custom_count",  type = int32 })
 
     local frame_sym = symbol(&frame_t, "frame")
 
@@ -133,6 +207,12 @@ function CompileCtx.new(plan_component)
         hit_t           = hit_t,
         clip_state_t    = clip_state_t,
         scroll_state_t  = scroll_state_t,
+        rect_cmd_t      = RectCmd,
+        border_cmd_t    = BorderCmd,
+        text_cmd_t      = TextCmd,
+        image_cmd_t     = ImageCmd,
+        scissor_cmd_t   = ScissorCmd,
+        custom_cmd_t    = CustomCmd,
         frame_t         = frame_t,
         node_count      = node_count,
         frame_sym       = frame_sym,
@@ -238,6 +318,18 @@ function Plan.ConstColor:compile_color(ctx)
     return `Color { [float](r), [float](g), [float](b), [float](a) }
 end
 
+function Plan.Param:compile_color(ctx)
+    local frame = ctx.frame_sym
+    local f = "p" .. self.slot
+    return `[frame].params.[f]
+end
+
+function Plan.State:compile_color(ctx)
+    local frame = ctx.frame_sym
+    local f = "s" .. self.slot
+    return `[frame].state.[f]
+end
+
 function Plan.Binding:compile_string(ctx)
     error("compile_string: unhandled " .. tostring(self.kind))
 end
@@ -251,6 +343,12 @@ function Plan.Param:compile_string(ctx)
     local frame = ctx.frame_sym
     local f = "p" .. self.slot
     return `[frame].params.[f]
+end
+
+function Plan.State:compile_string(ctx)
+    local frame = ctx.frame_sym
+    local f = "s" .. self.slot
+    return `[frame].state.[f]
 end
 
 function Plan.Binding:compile_vec2(ctx)
@@ -643,6 +741,15 @@ function Plan.Node:compile_layout(ctx)
     return quote [stmts] end
 end
 
+local function node_z_binding(ctx, node_index)
+    local node = ctx.plan.nodes[node_index + 1]
+    if node.float_slot then
+        local fs = ctx.plan.floats[node.float_slot + 1]
+        return fs.z_index:compile_number(ctx)
+    end
+    return `0.0f
+end
+
 function Plan.Node:compile_hit(ctx)
     local frame = ctx.frame_sym
     local input = ctx.plan.inputs[self.input_slot + 1]
@@ -677,7 +784,58 @@ function Plan.Node:compile_hit(ctx)
 end
 
 function Plan.Paint:compile_emit(ctx, node_index)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, node_index)
+    local opacity = self.opacity and self.opacity:compile_number(ctx) or `1.0f
+    local stmts = terralib.newlist()
+
+    if self.background then
+        local color = self.background:compile_color(ctx)
+        stmts:insert(quote
+            var idx = [frame].rect_count
+            [frame].rects[idx].x = [frame].nodes[node_index].x
+            [frame].rects[idx].y = [frame].nodes[node_index].y
+            [frame].rects[idx].w = [frame].nodes[node_index].w
+            [frame].rects[idx].h = [frame].nodes[node_index].h
+            [frame].rects[idx].color = [color]
+            [frame].rects[idx].opacity = [opacity]
+            [frame].rects[idx].z = [z]
+            [frame].rects[idx].seq = [frame].draw_seq
+            [frame].rect_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end)
+    end
+
+    if self.border then
+        local color = self.border.color:compile_color(ctx)
+        local l = self.border.left:compile_number(ctx)
+        local t = self.border.top:compile_number(ctx)
+        local r = self.border.right:compile_number(ctx)
+        local b = self.border.bottom:compile_number(ctx)
+        stmts:insert(quote
+            var idx = [frame].border_count
+            [frame].borders[idx].x = [frame].nodes[node_index].x
+            [frame].borders[idx].y = [frame].nodes[node_index].y
+            [frame].borders[idx].w = [frame].nodes[node_index].w
+            [frame].borders[idx].h = [frame].nodes[node_index].h
+            [frame].borders[idx].left = [l]
+            [frame].borders[idx].top = [t]
+            [frame].borders[idx].right = [r]
+            [frame].borders[idx].bottom = [b]
+            [frame].borders[idx].color = [color]
+            [frame].borders[idx].opacity = [opacity]
+            [frame].borders[idx].z = [z]
+            [frame].borders[idx].seq = [frame].draw_seq
+            [frame].border_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end)
+    end
+
+    return quote
+        if [frame].nodes[node_index].visible then
+            [stmts]
+        end
+    end
 end
 
 function Plan.InputSpec:compile_input(ctx, node_index)
@@ -784,11 +942,41 @@ function Plan.ClipSpec:compile_apply(ctx)
 end
 
 function Plan.ClipSpec:compile_emit_begin(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, self.node_index)
+    return quote
+        if [frame].nodes[self.node_index].visible then
+            var idx = [frame].scissor_count
+            [frame].scissors[idx].is_begin = true
+            [frame].scissors[idx].x0 = [frame].nodes[self.node_index].clip_x0
+            [frame].scissors[idx].y0 = [frame].nodes[self.node_index].clip_y0
+            [frame].scissors[idx].x1 = [frame].nodes[self.node_index].clip_x1
+            [frame].scissors[idx].y1 = [frame].nodes[self.node_index].clip_y1
+            [frame].scissors[idx].z = [z]
+            [frame].scissors[idx].seq = [frame].draw_seq
+            [frame].scissor_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end
+    end
 end
 
 function Plan.ClipSpec:compile_emit_end(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, self.node_index)
+    return quote
+        if [frame].nodes[self.node_index].visible then
+            var idx = [frame].scissor_count
+            [frame].scissors[idx].is_begin = false
+            [frame].scissors[idx].x0 = [frame].nodes[self.node_index].clip_x0
+            [frame].scissors[idx].y0 = [frame].nodes[self.node_index].clip_y0
+            [frame].scissors[idx].x1 = [frame].nodes[self.node_index].clip_x1
+            [frame].scissors[idx].y1 = [frame].nodes[self.node_index].clip_y1
+            [frame].scissors[idx].z = [z]
+            [frame].scissors[idx].seq = [frame].draw_seq
+            [frame].scissor_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end
+    end
 end
 
 function Plan.TextSpec:compile_measure(ctx, mode)
@@ -804,15 +992,77 @@ function Plan.TextSpec:compile_measure(ctx, mode)
 end
 
 function Plan.TextSpec:compile_emit(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, self.node_index)
+    local text = self.content:compile_string(ctx)
+    local font_id = self.font_id:compile_string(ctx)
+    local font_size = self.font_size:compile_number(ctx)
+    local letter_spacing = self.letter_spacing:compile_number(ctx)
+    local line_height = self.line_height:compile_number(ctx)
+    local color = self.color:compile_color(ctx)
+
+    return quote
+        if [frame].nodes[self.node_index].visible then
+            var idx = [frame].text_count
+            [frame].texts[idx].x = [frame].nodes[self.node_index].x
+            [frame].texts[idx].y = [frame].nodes[self.node_index].y
+            [frame].texts[idx].w = [frame].nodes[self.node_index].w
+            [frame].texts[idx].h = [frame].nodes[self.node_index].h
+            [frame].texts[idx].text = [text]
+            [frame].texts[idx].font_id = [font_id]
+            [frame].texts[idx].font_size = [font_size]
+            [frame].texts[idx].letter_spacing = [letter_spacing]
+            [frame].texts[idx].line_height = [line_height]
+            [frame].texts[idx].color = [color]
+            [frame].texts[idx].z = [z]
+            [frame].texts[idx].seq = [frame].draw_seq
+            [frame].text_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end
+    end
 end
 
 function Plan.ImageSpec:compile_emit(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, self.node_index)
+    local image_id = self.image_id:compile_string(ctx)
+    local tint = self.tint:compile_color(ctx)
+
+    return quote
+        if [frame].nodes[self.node_index].visible then
+            var idx = [frame].image_count
+            [frame].images[idx].x = [frame].nodes[self.node_index].x
+            [frame].images[idx].y = [frame].nodes[self.node_index].y
+            [frame].images[idx].w = [frame].nodes[self.node_index].w
+            [frame].images[idx].h = [frame].nodes[self.node_index].h
+            [frame].images[idx].image_id = [image_id]
+            [frame].images[idx].tint = [tint]
+            [frame].images[idx].z = [z]
+            [frame].images[idx].seq = [frame].draw_seq
+            [frame].image_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end
+    end
 end
 
 function Plan.CustomSpec:compile_emit(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local z = node_z_binding(ctx, self.node_index)
+    local kind = self.kind
+    return quote
+        if [frame].nodes[self.node_index].visible then
+            var idx = [frame].custom_count
+            [frame].customs[idx].x = [frame].nodes[self.node_index].x
+            [frame].customs[idx].y = [frame].nodes[self.node_index].y
+            [frame].customs[idx].w = [frame].nodes[self.node_index].w
+            [frame].customs[idx].h = [frame].nodes[self.node_index].h
+            [frame].customs[idx].kind = kind
+            [frame].customs[idx].z = [z]
+            [frame].customs[idx].seq = [frame].draw_seq
+            [frame].custom_count = idx + 1
+            [frame].draw_seq = [frame].draw_seq + 1
+        end
+    end
 end
 
 function Plan.FloatSpec:compile_place(ctx)
@@ -952,6 +1202,58 @@ function CompileCtx:compile_input_fn()
     end
 end
 
+function CompileCtx:emit_node_commands(node, stmts)
+    if node.clip_slot then
+        local clip = self.plan.clips[node.clip_slot + 1]
+        stmts:insert(clip:compile_emit_begin(self))
+    end
+
+    local paint = self.plan.paints[node.paint_slot + 1]
+    stmts:insert(paint:compile_emit(self, node.index))
+
+    if node.text_slot then
+        stmts:insert(self.plan.texts[node.text_slot + 1]:compile_emit(self))
+    end
+    if node.image_slot then
+        stmts:insert(self.plan.images[node.image_slot + 1]:compile_emit(self))
+    end
+    if node.custom_slot then
+        stmts:insert(self.plan.customs[node.custom_slot + 1]:compile_emit(self))
+    end
+
+    for _, child in ipairs(self:direct_children(node)) do
+        self:emit_node_commands(child, stmts)
+    end
+
+    if node.clip_slot then
+        local clip = self.plan.clips[node.clip_slot + 1]
+        stmts:insert(clip:compile_emit_end(self))
+    end
+end
+
+function CompileCtx:compile_emit_fn()
+    local frame = self.frame_sym
+    local root = self.plan.nodes[self.plan.root_index + 1]
+    local stmts = terralib.newlist()
+
+    stmts:insert(quote
+        [frame].rect_count = 0
+        [frame].border_count = 0
+        [frame].text_count = 0
+        [frame].image_count = 0
+        [frame].scissor_count = 0
+        [frame].custom_count = 0
+    end)
+
+    self:emit_node_commands(root, stmts)
+
+    return terra([frame])
+        escape
+            for _, s in ipairs(stmts) do emit(s) end
+        end
+    end
+end
+
 function Plan.Component:compile(ctx)
     local init_fn     = terra(frame: &ctx.frame_t)
         frame.draw_seq = 0
@@ -961,14 +1263,22 @@ function Plan.Component:compile(ctx)
         frame.hit.hot = -1
         frame.hit.active = -1
         frame.hit.focus = -1
+        frame.rect_count = 0
+        frame.border_count = 0
+        frame.text_count = 0
+        frame.image_count = 0
+        frame.scissor_count = 0
+        frame.custom_count = 0
     end
     local layout_fn   = ctx:compile_layout_fn()
     local hit_test_fn = ctx:compile_hit_test_fn()
     local input_fn    = ctx:compile_input_fn()
+    local emit_fn     = ctx:compile_emit_fn()
     local run_fn      = terra(frame: &ctx.frame_t)
         layout_fn(frame)
         hit_test_fn(frame)
         input_fn(frame)
+        emit_fn(frame)
     end
     local noop_fn     = terra(frame: &ctx.frame_t) end
 
@@ -993,12 +1303,12 @@ function Plan.Component:compile(ctx)
     return Kernel.Component(
         self.key,
         runtime_types,
-        Kernel.RectStream(StubCmd, stub_q),
-        Kernel.BorderStream(StubCmd, stub_q),
-        Kernel.TextStream(StubCmd, stub_q, stub_q),
-        Kernel.ImageStream(StubCmd, stub_q),
-        Kernel.ScissorStream(StubCmd, stub_q),
-        Kernel.CustomStream(StubCmd, stub_q),
+        Kernel.RectStream(RectCmd, stub_q),
+        Kernel.BorderStream(BorderCmd, stub_q),
+        Kernel.TextStream(TextCmd, stub_q, stub_q),
+        Kernel.ImageStream(ImageCmd, stub_q),
+        Kernel.ScissorStream(ScissorCmd, stub_q),
+        Kernel.CustomStream(CustomCmd, stub_q),
         kernels)
 end
 

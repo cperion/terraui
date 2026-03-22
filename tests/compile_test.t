@@ -861,4 +861,115 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- Test 20: rect and border commands are emitted
+---------------------------------------------------------------------------
+
+do
+    local one = Decl.NumLit(1)
+    local k = full_pipeline(Decl.Component(
+        "paint_rect_border", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            Decl.Decor(
+                Decl.ColorLit(0.2, 0.3, 0.4, 1.0),
+                Decl.Border(one, one, one, one, zero, Decl.ColorLit(1, 1, 1, 1)),
+                nil,
+                Decl.NumLit(0.5)),
+            nil, nil, no_input(), nil, nil, List())))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 500; f.viewport_h = 500
+        [run_q](&f)
+        if f.rect_count ~= 1 then return 1 end
+        if f.border_count ~= 1 then return 2 end
+        if f.rects[0].w ~= 100 then return 3 end
+        if f.rects[0].h ~= 50 then return 4 end
+        if f.rects[0].opacity ~= 0.5f then return 5 end
+        if f.rects[0].seq ~= 0 then return 6 end
+        if f.borders[0].seq ~= 1 then return 7 end
+        if f.borders[0].left ~= 1 then return 8 end
+        return 0
+    end
+
+    assert(test() == 0, "test 20 failed at " .. tostring(test()))
+    print("  test 20 (rect/border emission): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 21: text, image, custom, and scissor commands are emitted
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "emit_misc", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(120)), Decl.Fixed(Decl.NumLit(90)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(),
+            Decl.Clip(true, true, Decl.NumLit(5), Decl.NumLit(6)),
+            nil, no_input(), nil, nil,
+            List{
+                make_label("txt", "Hi", 20),
+                Decl.Node(
+                    Decl.Stable("img"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(30)), Decl.Fixed(Decl.NumLit(20)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(), nil,
+                    Decl.Image(Decl.ImageLeaf(
+                        Decl.StringLit("tex"),
+                        Decl.ColorLit(1, 1, 1, 1),
+                        Decl.ImageContain)),
+                    List()),
+                Decl.Node(
+                    Decl.Stable("custom"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(10)), Decl.Fixed(Decl.NumLit(10)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(), nil,
+                    Decl.Custom(Decl.CustomLeaf("widget", nil)),
+                    List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 300; f.viewport_h = 300
+        [run_q](&f)
+        if f.scissor_count ~= 2 then return 1 end
+        if f.scissors[0].is_begin ~= true then return 2 end
+        if f.scissors[1].is_begin ~= false then return 3 end
+        if f.text_count ~= 1 then return 4 end
+        if f.image_count ~= 1 then return 5 end
+        if f.custom_count ~= 1 then return 6 end
+        if f.texts[0].text == nil then return 7 end
+        if f.images[0].image_id == nil then return 8 end
+        if f.customs[0].kind == nil then return 9 end
+        return 0
+    end
+
+    assert(test() == 0, "test 21 failed at " .. tostring(test()))
+    print("  test 21 (text/image/custom/scissor emission): ok")
+end
+
+---------------------------------------------------------------------------
 print("compile test passed")
