@@ -1,0 +1,9 @@
+# generated/temp
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# local outputs
+/tmp/

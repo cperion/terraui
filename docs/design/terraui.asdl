@@ -1,0 +1,737 @@
+-- TerraUI compiler schema
+-- Canonical compiler-facing ASDL
+--
+-- Phase split:
+--   Decl   -> authored immediate-mode description
+--   Bound  -> resolved / canonical tree
+--   Plan   -> flattened layout / paint / input plan
+--   Kernel -> monomorphic compiled artifact
+--
+-- Notes:
+--   * ASDL method declarations are part of the schema surface.
+--   * Root-node lowering may pass parent_index = -1 as an internal lowering convention.
+--   * Optional slots in Plan use ? fields rather than compile-time sentinel values.
+
+extern TerraType
+extern TerraQuote
+extern BindCtx
+extern PlanCtx
+extern CompileCtx
+
+module Decl {
+    Component = (
+        string name,
+        Decl.Param* params,
+        Decl.StateSlot* state,
+        Decl.Node root
+    ) unique
+    methods {
+        bind(BindCtx ctx) -> Bound.Component
+    }
+
+    Param = (
+        string name,
+        Decl.ValueType ty,
+        Decl.Expr? default
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Param
+    }
+
+    StateSlot = (
+        string name,
+        Decl.ValueType ty,
+        Decl.Expr? initial
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.StateSlot
+    }
+
+    ValueType
+        = TBool
+        | TNumber
+        | TString
+        | TColor
+        | TImage
+        | TVec2
+        | TAny
+
+    Node = (
+        Decl.Id id,
+        Decl.Visibility visibility,
+        Decl.Layout layout,
+        Decl.Decor decor,
+        Decl.Clip? clip,
+        Decl.Floating? floating,
+        Decl.Input input,
+        Decl.Expr? aspect_ratio,
+        Decl.Leaf? leaf,
+        Decl.Node* children
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Node
+    }
+
+    Id
+        = Auto
+        | Stable(string name)
+        | Indexed(string name, Decl.Expr index)
+
+    Visibility = (
+        Decl.Expr? visible_when,
+        Decl.Expr? enabled_when
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Visibility
+    }
+
+    Layout = (
+        Decl.Axis axis,
+        Decl.Size width,
+        Decl.Size height,
+        Decl.Padding padding,
+        Decl.Expr gap,
+        Decl.AlignX align_x,
+        Decl.AlignY align_y
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Layout
+    }
+
+    Axis = Row | Column
+    AlignX = AlignLeft | AlignCenterX | AlignRight
+    AlignY = AlignTop | AlignCenterY | AlignBottom
+
+    Size
+        = Fit(Decl.Expr? min, Decl.Expr? max)
+        | Grow(Decl.Expr? min, Decl.Expr? max)
+        | Fixed(Decl.Expr value)
+        | Percent(Decl.Expr value)
+    methods {
+        bind(BindCtx ctx) -> Bound.Size
+    }
+
+    Padding = (
+        Decl.Expr left,
+        Decl.Expr top,
+        Decl.Expr right,
+        Decl.Expr bottom
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Padding
+    }
+
+    Decor = (
+        Decl.Expr? background,
+        Decl.Border? border,
+        Decl.CornerRadius? radius,
+        Decl.Expr? opacity
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Decor
+    }
+
+    Border = (
+        Decl.Expr left,
+        Decl.Expr top,
+        Decl.Expr right,
+        Decl.Expr bottom,
+        Decl.Expr between_children,
+        Decl.Expr color
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Border
+    }
+
+    CornerRadius = (
+        Decl.Expr top_left,
+        Decl.Expr top_right,
+        Decl.Expr bottom_right,
+        Decl.Expr bottom_left
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.CornerRadius
+    }
+
+    Clip = (
+        boolean horizontal,
+        boolean vertical,
+        Decl.Expr? child_offset_x,
+        Decl.Expr? child_offset_y
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Clip
+    }
+
+    Floating = (
+        Decl.FloatTarget target,
+        Decl.AttachPoint element_point,
+        Decl.AttachPoint parent_point,
+        Decl.Expr offset_x,
+        Decl.Expr offset_y,
+        Decl.Expr expand_w,
+        Decl.Expr expand_h,
+        Decl.Expr z_index,
+        Decl.PointerCapture pointer_capture
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Floating
+    }
+
+    FloatTarget
+        = FloatParent
+        | FloatById(Decl.Id id)
+
+    AttachPoint
+        = AttachLeftTop
+        | AttachTopCenter
+        | AttachRightTop
+        | AttachLeftCenter
+        | AttachCenter
+        | AttachRightCenter
+        | AttachLeftBottom
+        | AttachBottomCenter
+        | AttachRightBottom
+
+    PointerCapture = PointerCapture | PointerPassthrough
+
+    Input = (
+        boolean hover,
+        boolean press,
+        boolean focus,
+        boolean wheel,
+        string? cursor,
+        string? action
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Input
+    }
+
+    Leaf
+        = Text(Decl.TextLeaf)
+        | Image(Decl.ImageLeaf)
+        | Custom(Decl.CustomLeaf)
+    methods {
+        bind(BindCtx ctx) -> Bound.Leaf
+    }
+
+    TextLeaf = (
+        Decl.Expr content,
+        Decl.TextStyle style
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.TextLeaf
+    }
+
+    TextStyle = (
+        Decl.Expr color,
+        Decl.Expr font_id,
+        Decl.Expr font_size,
+        Decl.Expr letter_spacing,
+        Decl.Expr line_height,
+        Decl.WrapMode wrap,
+        Decl.TextAlign align
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.TextStyle
+    }
+
+    WrapMode = WrapWords | WrapNewlines | WrapNone
+    TextAlign = TextAlignLeft | TextAlignCenter | TextAlignRight
+
+    ImageLeaf = (
+        Decl.Expr image_id,
+        Decl.Expr tint,
+        Decl.ImageFit fit
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.ImageLeaf
+    }
+
+    ImageFit = ImageStretch | ImageContain | ImageCover
+
+    CustomLeaf = (
+        string kind,
+        Decl.Expr? payload
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.CustomLeaf
+    }
+
+    Expr
+        = BoolLit(boolean v)
+        | NumLit(number v)
+        | StringLit(string v)
+        | ColorLit(number r, number g, number b, number a)
+        | Vec2Lit(number x, number y)
+        | ParamRef(string name)
+        | StateRef(string name)
+        | ThemeRef(string name)
+        | EnvRef(string name)
+        | Unary(string op, Decl.Expr rhs)
+        | Binary(string op, Decl.Expr lhs, Decl.Expr rhs)
+        | Select(Decl.Expr cond, Decl.Expr yes, Decl.Expr no)
+        | Call(string fn, Decl.Expr* args)
+    methods {
+        bind(BindCtx ctx) -> Bound.Value
+    }
+}
+
+module Bound {
+    SpecializationKey = (
+        string renderer,
+        string text_backend,
+        Bound.Param* params,
+        Bound.StateSlot* state,
+        Bound.Node root
+    ) unique
+
+    Component = (
+        string name,
+        Bound.Param* params,
+        Bound.StateSlot* state,
+        Bound.SpecializationKey key,
+        Bound.Node root
+    )
+    methods {
+        plan(PlanCtx ctx) -> Plan.Component
+    }
+
+    Param = (
+        string name,
+        Decl.ValueType ty,
+        number slot
+    )
+
+    StateSlot = (
+        string name,
+        Decl.ValueType ty,
+        number slot,
+        Bound.Value? initial
+    )
+
+    Node = (
+        number local_id,
+        Bound.ResolvedId stable_id,
+        Bound.Visibility visibility,
+        Bound.Layout layout,
+        Bound.Decor decor,
+        Bound.Clip? clip,
+        Bound.Floating? floating,
+        Bound.Input input,
+        Bound.Value? aspect_ratio,
+        Bound.Leaf? leaf,
+        Bound.Node* children
+    )
+    methods {
+        plan(PlanCtx ctx, number parent_index) -> number
+    }
+
+    ResolvedId = (
+        string base,
+        number salt
+    )
+
+    Visibility = (
+        Bound.Value? visible_when,
+        Bound.Value? enabled_when
+    )
+
+    Layout = (
+        Decl.Axis axis,
+        Bound.Size width,
+        Bound.Size height,
+        Bound.Padding padding,
+        Bound.Value gap,
+        Decl.AlignX align_x,
+        Decl.AlignY align_y
+    )
+
+    Size
+        = Fit(Bound.Value? min, Bound.Value? max)
+        | Grow(Bound.Value? min, Bound.Value? max)
+        | Fixed(Bound.Value value)
+        | Percent(Bound.Value value)
+    methods {
+        plan(PlanCtx ctx) -> Plan.SizeRule
+    }
+
+    Padding = (
+        Bound.Value left,
+        Bound.Value top,
+        Bound.Value right,
+        Bound.Value bottom
+    )
+
+    Decor = (
+        Bound.Value? background,
+        Bound.Border? border,
+        Bound.CornerRadius? radius,
+        Bound.Value? opacity
+    )
+
+    Border = (
+        Bound.Value left,
+        Bound.Value top,
+        Bound.Value right,
+        Bound.Value bottom,
+        Bound.Value between_children,
+        Bound.Value color
+    )
+
+    CornerRadius = (
+        Bound.Value top_left,
+        Bound.Value top_right,
+        Bound.Value bottom_right,
+        Bound.Value bottom_left
+    )
+
+    Clip = (
+        boolean horizontal,
+        boolean vertical,
+        Bound.Value? child_offset_x,
+        Bound.Value? child_offset_y
+    )
+    methods {
+        plan(PlanCtx ctx, number node_index) -> number
+    }
+
+    Floating = (
+        Bound.FloatTarget target,
+        Decl.AttachPoint element_point,
+        Decl.AttachPoint parent_point,
+        Bound.Value offset_x,
+        Bound.Value offset_y,
+        Bound.Value expand_w,
+        Bound.Value expand_h,
+        Bound.Value z_index,
+        Decl.PointerCapture pointer_capture
+    )
+
+    FloatTarget
+        = FloatParent
+        | FloatByStableId(Bound.ResolvedId id)
+
+    Input = (
+        boolean hover,
+        boolean press,
+        boolean focus,
+        boolean wheel,
+        string? cursor,
+        string? action
+    )
+
+    Leaf
+        = Text(Bound.TextLeaf)
+        | Image(Bound.ImageLeaf)
+        | Custom(Bound.CustomLeaf)
+    methods {
+        plan(PlanCtx ctx, number node_index) -> Plan.LeafSlots
+    }
+
+    TextLeaf = (
+        Bound.Value content,
+        Bound.TextStyle style
+    )
+
+    TextStyle = (
+        Bound.Value color,
+        Bound.Value font_id,
+        Bound.Value font_size,
+        Bound.Value letter_spacing,
+        Bound.Value line_height,
+        Decl.WrapMode wrap,
+        Decl.TextAlign align
+    )
+
+    ImageLeaf = (
+        Bound.Value image_id,
+        Bound.Value tint,
+        Decl.ImageFit fit
+    )
+
+    CustomLeaf = (
+        string kind,
+        Bound.Value? payload
+    )
+
+    Value
+        = ConstBool(boolean v)
+        | ConstNumber(number v)
+        | ConstString(string v)
+        | ConstColor(number r, number g, number b, number a)
+        | ConstVec2(number x, number y)
+        | ParamSlot(number slot)
+        | StateSlot(number slot)
+        | EnvSlot(string name)
+        | Unary(string op, Bound.Value rhs)
+        | Binary(string op, Bound.Value lhs, Bound.Value rhs)
+        | Select(Bound.Value cond, Bound.Value yes, Bound.Value no)
+        | Intrinsic(string fn, Bound.Value* args)
+    methods {
+        plan_binding(PlanCtx ctx) -> Plan.Binding
+    }
+}
+
+module Plan {
+    Component = (
+        Bound.SpecializationKey key,
+        Plan.Node* nodes,
+        Plan.Guard* guards,
+        Plan.Paint* paints,
+        Plan.InputSpec* inputs,
+        Plan.ClipSpec* clips,
+        Plan.TextSpec* texts,
+        Plan.ImageSpec* images,
+        Plan.CustomSpec* customs,
+        Plan.FloatSpec* floats,
+        number root_index
+    ) unique
+    methods {
+        compile(CompileCtx ctx) -> Kernel.Component
+    }
+
+    Node = (
+        number index,
+        number? parent,
+        number? first_child,
+        number child_count,
+        number subtree_end,
+
+        Decl.Axis axis,
+        Plan.SizeRule width,
+        Plan.SizeRule height,
+        Plan.Binding padding_left,
+        Plan.Binding padding_top,
+        Plan.Binding padding_right,
+        Plan.Binding padding_bottom,
+        Plan.Binding gap,
+        Decl.AlignX align_x,
+        Decl.AlignY align_y,
+
+        number guard_slot,
+        number paint_slot,
+        number input_slot,
+        number? clip_slot,
+        number? text_slot,
+        number? image_slot,
+        number? custom_slot,
+        number? float_slot,
+
+        Plan.Binding? aspect_ratio
+    )
+    methods {
+        compile_layout(CompileCtx ctx) -> TerraQuote
+        compile_hit(CompileCtx ctx) -> TerraQuote
+    }
+
+    SizeRule
+        = Fit(Plan.Binding? min, Plan.Binding? max)
+        | Grow(Plan.Binding? min, Plan.Binding? max)
+        | Fixed(Plan.Binding value)
+        | Percent(Plan.Binding value)
+    methods {
+        compile_axis(CompileCtx ctx, string axis_name) -> TerraQuote
+    }
+
+    MeasureMode = MeasureWidth | MeasureHeight
+
+    Guard = (
+        Plan.Binding? visible_when,
+        Plan.Binding? enabled_when
+    )
+
+    Paint = (
+        Plan.Binding? background,
+        Plan.Border? border,
+        Plan.CornerRadius? radius,
+        Plan.Binding? opacity
+    )
+    methods {
+        compile_emit(CompileCtx ctx, number node_index) -> TerraQuote
+    }
+
+    Border = (
+        Plan.Binding left,
+        Plan.Binding top,
+        Plan.Binding right,
+        Plan.Binding bottom,
+        Plan.Binding between_children,
+        Plan.Binding color
+    )
+
+    CornerRadius = (
+        Plan.Binding top_left,
+        Plan.Binding top_right,
+        Plan.Binding bottom_right,
+        Plan.Binding bottom_left
+    )
+
+    InputSpec = (
+        boolean hover,
+        boolean press,
+        boolean focus,
+        boolean wheel,
+        string? cursor,
+        string? action
+    )
+    methods {
+        compile_input(CompileCtx ctx, number node_index) -> TerraQuote
+    }
+
+    ClipSpec = (
+        number node_index,
+        boolean horizontal,
+        boolean vertical,
+        Plan.Binding? child_offset_x,
+        Plan.Binding? child_offset_y
+    )
+    methods {
+        compile_apply(CompileCtx ctx) -> TerraQuote
+        compile_emit_begin(CompileCtx ctx) -> TerraQuote
+        compile_emit_end(CompileCtx ctx) -> TerraQuote
+    }
+
+    TextSpec = (
+        number node_index,
+        Plan.Binding content,
+        Plan.Binding color,
+        Plan.Binding font_id,
+        Plan.Binding font_size,
+        Plan.Binding letter_spacing,
+        Plan.Binding line_height,
+        Decl.WrapMode wrap,
+        Decl.TextAlign align
+    )
+    methods {
+        compile_measure(CompileCtx ctx, Plan.MeasureMode mode) -> TerraQuote
+        compile_emit(CompileCtx ctx) -> TerraQuote
+    }
+
+    ImageSpec = (
+        number node_index,
+        Plan.Binding image_id,
+        Plan.Binding tint,
+        Decl.ImageFit fit
+    )
+    methods {
+        compile_emit(CompileCtx ctx) -> TerraQuote
+    }
+
+    CustomSpec = (
+        number node_index,
+        string kind,
+        Plan.Binding? payload
+    )
+    methods {
+        compile_emit(CompileCtx ctx) -> TerraQuote
+    }
+
+    FloatSpec = (
+        number node_index,
+        number attach_parent_slot,
+        Decl.AttachPoint element_point,
+        Decl.AttachPoint parent_point,
+        Plan.Binding offset_x,
+        Plan.Binding offset_y,
+        Plan.Binding expand_w,
+        Plan.Binding expand_h,
+        Plan.Binding z_index,
+        Decl.PointerCapture pointer_capture
+    )
+    methods {
+        compile_place(CompileCtx ctx) -> TerraQuote
+    }
+
+    LeafSlots = (
+        number? text_slot,
+        number? image_slot,
+        number? custom_slot
+    )
+
+    Binding
+        = ConstBool(boolean v)
+        | ConstNumber(number v)
+        | ConstString(string v)
+        | ConstColor(number r, number g, number b, number a)
+        | ConstVec2(number x, number y)
+        | Param(number slot)
+        | State(number slot)
+        | Env(string name)
+        | Expr(string op, Plan.Binding* args)
+    methods {
+        compile_bool(CompileCtx ctx) -> TerraQuote
+        compile_number(CompileCtx ctx) -> TerraQuote
+        compile_string(CompileCtx ctx) -> TerraQuote
+        compile_color(CompileCtx ctx) -> TerraQuote
+        compile_vec2(CompileCtx ctx) -> TerraQuote
+    }
+}
+
+module Kernel {
+    RectStream = (
+        TerraType cmd_t,
+        TerraQuote emit_fn
+    )
+
+    BorderStream = (
+        TerraType cmd_t,
+        TerraQuote emit_fn
+    )
+
+    TextStream = (
+        TerraType cmd_t,
+        TerraQuote measure_fn,
+        TerraQuote emit_fn
+    )
+
+    ImageStream = (
+        TerraType cmd_t,
+        TerraQuote emit_fn
+    )
+
+    ScissorStream = (
+        TerraType cmd_t,
+        TerraQuote emit_fn
+    )
+
+    CustomStream = (
+        TerraType cmd_t,
+        TerraQuote emit_fn
+    )
+
+    RuntimeTypes = (
+        TerraType params_t,
+        TerraType state_t,
+        TerraType frame_t,
+        TerraType input_t,
+        TerraType node_t,
+        TerraType clip_state_t,
+        TerraType scroll_state_t,
+        TerraType hit_t
+    )
+
+    Kernels = (
+        TerraQuote init_fn,
+        TerraQuote layout_fn,
+        TerraQuote input_fn,
+        TerraQuote hit_test_fn,
+        TerraQuote run_fn
+    )
+
+    Component = (
+        Bound.SpecializationKey key,
+        Kernel.RuntimeTypes types,
+        Kernel.RectStream rects,
+        Kernel.BorderStream borders,
+        Kernel.TextStream texts,
+        Kernel.ImageStream images,
+        Kernel.ScissorStream scissors,
+        Kernel.CustomStream customs,
+        Kernel.Kernels kernels
+    ) unique
+    methods {
+        frame_type() -> TerraType
+        run_quote() -> TerraQuote
+    }
+}
