@@ -490,8 +490,6 @@ function CompileCtx:emit_node_measure(node)
     stmts:insert(quote
         var [child_w] = 0.0f
         var [child_h] = 0.0f
-        [frame].nodes[i].visible = true
-        [frame].nodes[i].enabled = true
     end)
 
     local child_count = #children
@@ -526,8 +524,13 @@ function CompileCtx:emit_node_measure(node)
     end
 
     stmts:insert(quote
-        [frame].nodes[i].want_w = terralib.select([leaf_w] > [child_w], [leaf_w], [child_w]) + [pad_l] + [pad_r]
-        [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+        if [frame].nodes[i].visible then
+            [frame].nodes[i].want_w = terralib.select([leaf_w] > [child_w], [leaf_w], [child_w]) + [pad_l] + [pad_r]
+            [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+        else
+            [frame].nodes[i].want_w = 0.0f
+            [frame].nodes[i].want_h = 0.0f
+        end
     end)
 
     return quote [stmts] end
@@ -709,14 +712,14 @@ end
 
 function Plan.Node:compile_layout(ctx)
     local frame = ctx.frame_sym
-    local stmts = terralib.newlist()
+    local i = self.index
+    local active = terralib.newlist()
 
     if self.parent == nil then
-        local i = self.index
         local w0 = resolve_size(self.width, `[frame].viewport_w, `[frame].nodes[i].want_w, ctx)
         local h0 = resolve_size(self.height, `[frame].viewport_h, `[frame].nodes[i].want_h, ctx)
         local w, h = apply_aspect_ratio(self, w0, h0, ctx)
-        stmts:insert(quote
+        active:insert(quote
             [frame].nodes[i].x = 0
             [frame].nodes[i].y = 0
             [frame].nodes[i].w = [w]
@@ -726,19 +729,36 @@ function Plan.Node:compile_layout(ctx)
             [frame].nodes[i].clip_x1 = [frame].viewport_w
             [frame].nodes[i].clip_y1 = [frame].viewport_h
         end)
-        stmts:insert(ctx:emit_node_content_box(self))
+        active:insert(ctx:emit_node_content_box(self))
     end
 
     if self.clip_slot then
         local clip = ctx.plan.clips[self.clip_slot + 1]
-        stmts:insert(clip:compile_apply(ctx))
+        active:insert(clip:compile_apply(ctx))
     end
 
     if self.child_count > 0 then
-        stmts:insertall(ctx:emit_children_placement(self))
+        active:insertall(ctx:emit_children_placement(self))
     end
 
-    return quote [stmts] end
+    return quote
+        if [frame].nodes[i].visible then
+            [active]
+        else
+            [frame].nodes[i].x = 0
+            [frame].nodes[i].y = 0
+            [frame].nodes[i].w = 0
+            [frame].nodes[i].h = 0
+            [frame].nodes[i].content_x = 0
+            [frame].nodes[i].content_y = 0
+            [frame].nodes[i].content_w = 0
+            [frame].nodes[i].content_h = 0
+            [frame].nodes[i].clip_x0 = 0
+            [frame].nodes[i].clip_y0 = 0
+            [frame].nodes[i].clip_x1 = 0
+            [frame].nodes[i].clip_y1 = 0
+        end
+    end
 end
 
 local function node_z_binding(ctx, node_index)
@@ -1105,6 +1125,27 @@ function Plan.FloatSpec:compile_place(ctx)
     end
 end
 
+function CompileCtx:emit_guard_eval(node)
+    local frame = self.frame_sym
+    local i = node.index
+    local guard = self.plan.guards[node.guard_slot + 1]
+    local visible = guard.visible_when and guard.visible_when:compile_bool(self) or `true
+    local enabled = guard.enabled_when and guard.enabled_when:compile_bool(self) or `true
+
+    if node.parent == nil then
+        return quote
+            [frame].nodes[i].visible = [visible]
+            [frame].nodes[i].enabled = [enabled]
+        end
+    end
+
+    local p = node.parent
+    return quote
+        [frame].nodes[i].visible = [frame].nodes[p].visible and [visible]
+        [frame].nodes[i].enabled = [frame].nodes[p].enabled and [enabled]
+    end
+end
+
 function CompileCtx:compile_layout_fn()
     local frame = self.frame_sym
     local nodes = self.plan.nodes
@@ -1116,6 +1157,11 @@ function CompileCtx:compile_layout_fn()
         [frame].action_name = nil
         [frame].cursor_name = nil
     end)
+
+    -- pass 0: guard evaluation (preorder)
+    for _, node in ipairs(nodes) do
+        stmts:insert(self:emit_guard_eval(node))
+    end
 
     -- pass 1: intrinsic measure (postorder)
     for i = #nodes, 1, -1 do

@@ -972,4 +972,108 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- Test 22: invisible guard suppresses layout, hit, and emission
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "invisible_guard",
+        List{ Decl.Param("show", Decl.TBool, nil) },
+        List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("child"),
+                    Decl.Visibility(Decl.ParamRef("show"), nil),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    Decl.Decor(Decl.ColorLit(1,0,0,1), nil, nil, nil),
+                    nil, nil,
+                    Decl.Input(true, true, false, false, "hand", "click"),
+                    nil, nil, List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        f.params.p0 = false
+        f.input.mouse_x = 10; f.input.mouse_y = 10
+        [run_q](&f)
+        if f.nodes[1].visible ~= false then return 1 end
+        if f.nodes[1].w ~= 0 then return 2 end
+        if f.hit.hot ~= -1 then return 3 end
+        if f.rect_count ~= 0 then return 4 end
+        return 0
+    end
+
+    assert(test() == 0, "test 22 failed at " .. tostring(test()))
+    print("  test 22 (invisible guard): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 23: disabled guard blocks hit without hiding paint/layout
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "disabled_guard",
+        List{ Decl.Param("enabled", Decl.TBool, nil) },
+        List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("child"),
+                    Decl.Visibility(nil, Decl.ParamRef("enabled")),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    Decl.Decor(Decl.ColorLit(1,0,0,1), nil, nil, nil),
+                    nil, nil,
+                    Decl.Input(true, true, false, false, "hand", "click"),
+                    nil, nil, List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        f.params.p0 = false
+        f.input.mouse_x = 10; f.input.mouse_y = 10
+        [run_q](&f)
+        if f.nodes[1].visible ~= true then return 1 end
+        if f.nodes[1].enabled ~= false then return 2 end
+        if f.hit.hot ~= -1 then return 3 end
+        if f.rect_count ~= 1 then return 4 end
+        return 0
+    end
+
+    assert(test() == 0, "test 23 failed at " .. tostring(test()))
+    print("  test 23 (disabled guard): ok")
+end
+
+---------------------------------------------------------------------------
 print("compile test passed")
