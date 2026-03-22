@@ -463,10 +463,12 @@ do
             Decl.Grow(nil, nil), Decl.Grow(nil, nil))))
 
     local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
     local layout_q = k.kernels.layout_fn
 
     local test = terra()
         var f : Frame
+        [init_q](&f)
         f.viewport_w = 320; f.viewport_h = 200
         [layout_q](&f)
 
@@ -738,6 +740,124 @@ do
 
     assert(test() == 0, "test 17 failed at " .. tostring(test()))
     print("  test 17 (floating placement): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 18: hit testing finds topmost interactive node
+---------------------------------------------------------------------------
+
+do
+    local clickable = Decl.Input(true, true, true, false, "hand", "click")
+    local k = full_pipeline(Decl.Component(
+        "hit_test", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("a"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(80)), Decl.Fixed(Decl.NumLit(80)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, clickable, nil, nil, List()),
+                Decl.Node(
+                    Decl.Stable("b"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(80)), Decl.Fixed(Decl.NumLit(80)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil,
+                    Decl.Floating(
+                        Decl.FloatParent,
+                        Decl.AttachLeftTop,
+                        Decl.AttachLeftTop,
+                        zero, zero, zero, zero, zero,
+                        Decl.Passthrough),
+                    clickable, nil, nil, List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local layout_q = k.kernels.layout_fn
+    local hit_q = k.kernels.hit_test_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        f.input.mouse_x = 10; f.input.mouse_y = 10
+        [layout_q](&f)
+        [hit_q](&f)
+        -- floating child b is visited later / on top
+        if f.hit.hot ~= 2 then return 1 end
+        return 0
+    end
+
+    assert(test() == 0, "test 18 failed at " .. tostring(test()))
+    print("  test 18 (hit testing): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 19: input press/release drives active, focus, and action
+---------------------------------------------------------------------------
+
+do
+    local clickable = Decl.Input(true, true, true, false, "hand", "activate")
+    local k = full_pipeline(Decl.Component(
+        "input_test", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("btn"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(50)), Decl.Fixed(Decl.NumLit(30)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, clickable, nil, nil, List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        f.input.mouse_x = 10; f.input.mouse_y = 10
+
+        -- press frame
+        f.input.mouse_pressed = true
+        f.input.mouse_released = false
+        [run_q](&f)
+        if f.hit.hot ~= 1 then return 1 end
+        if f.hit.active ~= 1 then return 2 end
+        if f.hit.focus ~= 1 then return 3 end
+        if f.cursor_name == nil then return 4 end
+
+        -- release frame
+        f.input.mouse_pressed = false
+        f.input.mouse_released = true
+        [run_q](&f)
+        if f.action_node ~= 1 then return 5 end
+        if f.action_name == nil then return 6 end
+        if f.hit.active ~= -1 then return 7 end
+        return 0
+    end
+
+    assert(test() == 0, "test 19 failed at " .. tostring(test()))
+    print("  test 19 (input transitions): ok")
 end
 
 ---------------------------------------------------------------------------

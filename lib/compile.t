@@ -644,7 +644,36 @@ function Plan.Node:compile_layout(ctx)
 end
 
 function Plan.Node:compile_hit(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local input = ctx.plan.inputs[self.input_slot + 1]
+
+    local interactive = input.hover or input.press or input.focus or input.wheel
+                        or input.cursor ~= nil or input.action ~= nil
+    if not interactive then
+        return quote end
+    end
+
+    local i = self.index
+    local stmts = terralib.newlist()
+    stmts:insert(quote
+        if [frame].hit.hot == -1 and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+            if [frame].input.mouse_x >= [frame].nodes[i].x and [frame].input.mouse_x <= [frame].nodes[i].x + [frame].nodes[i].w and
+               [frame].input.mouse_y >= [frame].nodes[i].y and [frame].input.mouse_y <= [frame].nodes[i].y + [frame].nodes[i].h and
+               [frame].input.mouse_x >= [frame].nodes[i].clip_x0 and [frame].input.mouse_x <= [frame].nodes[i].clip_x1 and
+               [frame].input.mouse_y >= [frame].nodes[i].clip_y0 and [frame].input.mouse_y <= [frame].nodes[i].clip_y1 then
+                [frame].hit.hot = i
+            end
+        end
+    end)
+    if input.cursor then
+        local c = input.cursor
+        stmts:insert(quote
+            if [frame].hit.hot == i then
+                [frame].cursor_name = c
+            end
+        end)
+    end
+    return quote [stmts] end
 end
 
 function Plan.Paint:compile_emit(ctx, node_index)
@@ -652,7 +681,45 @@ function Plan.Paint:compile_emit(ctx, node_index)
 end
 
 function Plan.InputSpec:compile_input(ctx, node_index)
-    return quote end
+    local frame = ctx.frame_sym
+    local stmts = terralib.newlist()
+
+    if self.press then
+        stmts:insert(quote
+            if [frame].input.mouse_pressed and [frame].hit.hot == node_index then
+                [frame].hit.active = node_index
+            end
+        end)
+    end
+
+    if self.focus then
+        stmts:insert(quote
+            if [frame].input.mouse_pressed and [frame].hit.hot == node_index then
+                [frame].hit.focus = node_index
+            end
+        end)
+    end
+
+    if self.action then
+        local action = self.action
+        stmts:insert(quote
+            if [frame].input.mouse_released and [frame].hit.active == node_index then
+                if [frame].hit.hot == node_index then
+                    [frame].action_node = node_index
+                    [frame].action_name = action
+                end
+                [frame].hit.active = -1
+            end
+        end)
+    elseif self.press then
+        stmts:insert(quote
+            if [frame].input.mouse_released and [frame].hit.active == node_index then
+                [frame].hit.active = -1
+            end
+        end)
+    end
+
+    return quote [stmts] end
 end
 
 local function attach_point_xy(xq, yq, wq, hq, point)
@@ -798,9 +865,6 @@ function CompileCtx:compile_layout_fn()
         [frame].action_node = -1
         [frame].action_name = nil
         [frame].cursor_name = nil
-        [frame].hit.hot = -1
-        [frame].hit.active = -1
-        [frame].hit.focus = -1
     end)
 
     -- pass 1: intrinsic measure (postorder)
@@ -845,9 +909,68 @@ function CompileCtx:compile_layout_fn()
     end
 end
 
+function CompileCtx:compile_hit_test_fn()
+    local frame = self.frame_sym
+    local nodes = self.plan.nodes
+    local stmts = terralib.newlist()
+
+    stmts:insert(quote
+        [frame].hit.hot = -1
+        [frame].cursor_name = nil
+    end)
+
+    for i = #nodes, 1, -1 do
+        stmts:insert(nodes[i]:compile_hit(self))
+    end
+
+    return terra([frame])
+        escape
+            for _, s in ipairs(stmts) do emit(s) end
+        end
+    end
+end
+
+function CompileCtx:compile_input_fn()
+    local frame = self.frame_sym
+    local nodes = self.plan.nodes
+    local stmts = terralib.newlist()
+
+    stmts:insert(quote
+        [frame].action_node = -1
+        [frame].action_name = nil
+    end)
+
+    for _, node in ipairs(nodes) do
+        local input = self.plan.inputs[node.input_slot + 1]
+        stmts:insert(input:compile_input(self, node.index))
+    end
+
+    return terra([frame])
+        escape
+            for _, s in ipairs(stmts) do emit(s) end
+        end
+    end
+end
+
 function Plan.Component:compile(ctx)
-    local layout_fn = ctx:compile_layout_fn()
-    local noop_fn   = terra(frame: &ctx.frame_t) end
+    local init_fn     = terra(frame: &ctx.frame_t)
+        frame.draw_seq = 0
+        frame.action_node = -1
+        frame.action_name = nil
+        frame.cursor_name = nil
+        frame.hit.hot = -1
+        frame.hit.active = -1
+        frame.hit.focus = -1
+    end
+    local layout_fn   = ctx:compile_layout_fn()
+    local hit_test_fn = ctx:compile_hit_test_fn()
+    local input_fn    = ctx:compile_input_fn()
+    local run_fn      = terra(frame: &ctx.frame_t)
+        layout_fn(frame)
+        hit_test_fn(frame)
+        input_fn(frame)
+    end
+    local noop_fn     = terra(frame: &ctx.frame_t) end
 
     local runtime_types = Kernel.RuntimeTypes(
         ctx.params_t,
@@ -860,11 +983,11 @@ function Plan.Component:compile(ctx)
         ctx.hit_t)
 
     local kernels = Kernel.Kernels(
-        `noop_fn,
+        `init_fn,
         `layout_fn,
-        `noop_fn,
-        `noop_fn,
-        `noop_fn)
+        `input_fn,
+        `hit_test_fn,
+        `run_fn)
 
     local stub_q = `noop_fn
     return Kernel.Component(
