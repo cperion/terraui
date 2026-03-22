@@ -8,3 +8,4 @@ terra tests/schema_validation.t
 terra tests/schema_defaults_constraints.t
 terra tests/terraui_schema_smoke.t
 terra tests/bind_test.t
+terra tests/plan_test.t
