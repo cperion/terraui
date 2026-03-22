@@ -1,6 +1,6 @@
 # TerraUI Builder API Reference
 
-Status: draft v0.4  
+Status: implementation-aligned v0.5  
 Purpose: define the concrete public DSL/builders for TerraUI v1.
 
 ## Canonical companion docs
@@ -8,8 +8,10 @@ Purpose: define the concrete public DSL/builders for TerraUI v1.
 - `docs/design/09-authoring-api.md`
 - `docs/design/terraui.asdl`
 - `docs/design/07-method-contracts.md`
+- `lib/dsl.t`
+- `lib/terraui.t`
 
-This document freezes the concrete public surface selected by the authoring API design.
+This document describes the **currently shipped** builder surface.
 
 ## 1. Style summary
 
@@ -17,21 +19,21 @@ The DSL uses three main shapes:
 
 ### Component
 ```lua
-component "name" { ... }
+ui.component("name") { ... }
 ```
 
 ### Leaves / single-node widgets
 ```lua
-label { ... }
-button { ... }
-image_view { ... }
+ui.label { ... }
+ui.button { ... }
+ui.image_view { ... }
 ```
 
 ### Containers
 ```lua
-row { ... } { ... }
-column { ... } { ... }
-scroll_region { ... } { ... }
+ui.row { ... } { ... }
+ui.column { ... } { ... }
+ui.scroll_region { ... } { ... }
 ```
 
 Semantic rule:
@@ -43,16 +45,17 @@ Semantic rule:
 Recommended setup:
 
 ```lua
+local terraui = require("lib/terraui")
 local ui = terraui.dsl()
 ```
 
-The returned environment/table should expose:
+The returned table currently exposes:
 - constructors/combinators
 - helper namespaces
 - value helpers
 - child fragment helpers
 
-## 3. Required exported bindings
+## 3. Exported bindings
 
 ## 3.1 Core constructors
 
@@ -83,13 +86,19 @@ ui.maybe
 ui.fragment
 ```
 
-## 3.3 Identity/value helpers
+## 3.3 Identity / value / expr helpers
 
 ```lua
-ui.stable
-ui.indexed
+ui.as_expr
+ui.num
+ui.str
+ui.bool
 ui.rgba
 ui.vec2
+
+ui.stable
+ui.indexed
+
 ui.fit
 ui.grow
 ui.fixed
@@ -97,6 +106,7 @@ ui.percent
 ui.pad
 ui.border
 ui.radius
+
 ui.call
 ui.select
 ui.theme
@@ -123,8 +133,6 @@ ui.float
 ## 4. Helper namespaces
 
 ## 4.1 `ui.types`
-
-Required members:
 
 ```lua
 ui.types.bool
@@ -213,11 +221,11 @@ ui.float.by_id(id)
 
 ## 5. Component and declaration constructors
 
-## 5.1 `component "name" { spec }`
+## 5.1 `ui.component(name) { spec }`
 
 ### Form
 ```lua
-component "name" {
+ui.component("name") {
     params = { ... },
     state = { ... },
     root = ...,
@@ -234,15 +242,11 @@ component "name" {
 ### Lowering
 Returns `Decl.Component`.
 
-### Validation
-- `name` must be non-empty
-- `root` must be a valid node descriptor
-
-## 5.2 `param "name" { ... }`
+## 5.2 `ui.param(name) { ... }`
 
 ### Form
 ```lua
-param "title" { type = ui.types.string, default = "Hello" }
+ui.param("title") { type = ui.types.string, default = "Hello" }
 ```
 
 ### Required fields
@@ -252,13 +256,13 @@ param "title" { type = ui.types.string, default = "Hello" }
 - `default`
 
 ### Lowering
-Returns a declaration item for `params = { ... }` and lowers to `Decl.Param`.
+Returns `Decl.Param`.
 
-## 5.3 `state "name" { ... }`
+## 5.3 `ui.state(name) { ... }`
 
 ### Form
 ```lua
-state "scroll_y" { type = ui.types.number, initial = 0 }
+ui.state("scroll_y") { type = ui.types.number, initial = 0 }
 ```
 
 ### Required fields
@@ -268,298 +272,293 @@ state "scroll_y" { type = ui.types.number, initial = 0 }
 - `initial`
 
 ### Lowering
-Returns a declaration item for `state = { ... }` and lowers to `Decl.StateSlot`.
+Returns `Decl.StateSlot`.
 
 ## 6. Leaf constructors
 
-Leaf constructors consume one props record and return one node descriptor.
+Leaf constructors consume one props record and return one `Decl.Node`.
 
-## 6.1 `label { props }`
+## 6.1 `ui.label { props }`
 
-### Props
-- `id?`
+### Required props
 - `text`
-- `color?`
-- `font_id?`
-- `font_size?`
-- `letter_spacing?`
-- `line_height?`
-- `wrap?`
-- `text_align?`
-- `width?`
-- `height?`
-- `padding?`
-- `align_x?`
-- `align_y?`
-- `aspect_ratio?`
-- `visible_when?`
-- `enabled_when?`
+
+### Common optional props
+- `id`
+- `color`
+- `font_id`
+- `font_size`
+- `letter_spacing`
+- `line_height`
+- `wrap`
+- `text_align`
+- `width`
+- `height`
+- `padding`
+- `align_x`
+- `align_y`
+- `aspect_ratio`
+- `visible_when`
+- `enabled_when`
+- `background`
+- `border`
+- `radius`
+- `opacity`
+
+### Defaults
+- axis = `Row`
+- width = `fit()`
+- height = `fit()`
+- color = white
+- font_id = `"default"`
+- font_size = `14`
+- letter_spacing = `0`
+- line_height = `1.2`
+- wrap = `ui.wrap.none`
+- text_align = `ui.text_align.left`
+
+## 6.2 `ui.button { props }`
+
+### Required props
+- `text`
+
+### Common optional props
+- all common visual/layout props from `label`
+- `action`
+- `cursor`
+- `focus`
+- `hover`
+- `press`
+
+### Defaults
+- width = `fit()`
+- height = `fit()`
+- `hover = true`
+- `press = true`
+- `cursor = "pointer"` unless overridden
+- `focus = false` unless explicitly requested
 
 ### Lowering
-Node + text leaf.
+Returns one node with:
+- text leaf
+- interaction defaults
 
-## 6.2 `button { props }`
+## 6.3 `ui.image_view { props }`
 
-### Props
-- `id`
-- `text`
-- `action?`
-- `cursor?`
-- `width?`
-- `height?`
-- `padding?`
-- `align_x?`
-- `align_y?`
-- `background?`
-- `border?`
-- `radius?`
-- `opacity?`
-- `text_color?`
-- `font_id?`
-- `font_size?`
-- `visible_when?`
-- `enabled_when?`
-- `focus?`
-
-### Lowering
-Interactive node + text leaf + button defaults.
-
-## 6.3 `image_view { props }`
-
-### Props
-- `id`
+### Required props
 - `image`
-- `fit?`
-- `tint?`
-- `aspect_ratio?`
-- `width?`
-- `height?`
-- `padding?`
-- `background?`
-- `border?`
-- `radius?`
-- `opacity?`
-- `visible_when?`
-- `enabled_when?`
 
-### Lowering
-Node + image leaf.
-
-## 6.4 `spacer { props }`
-
-### Props
-- `id?`
-- `width?`
-- `height?`
-
-### Lowering
-Structural node with no leaf.
-
-## 6.5 `custom { props }`
-
-### Props
+### Optional props
 - `id`
-- `kind`
-- `payload?`
-- `width?`
-- `height?`
-- `aspect_ratio?`
-- `padding?`
-- `background?`
-- `border?`
-- `radius?`
-- `opacity?`
+- `fit`
+- `tint`
+- `aspect_ratio`
+- `width`
+- `height`
+- `padding`
+- `background`
+- `border`
+- `radius`
+- `opacity`
+- `visible_when`
+- `enabled_when`
+
+### Defaults
+- width = `fit()`
+- height = `fit()`
+- tint = white
+- fit = `ui.image_fit.contain`
+
+## 6.4 `ui.spacer { props }`
+
+### Optional props
+- `id`
+- `width`
+- `height`
+
+### Defaults
+- width = `fixed(0)`
+- height = `fixed(0)`
 
 ### Lowering
-Node + custom leaf.
+Returns a structural node with no leaf.
+
+## 6.5 `ui.custom { props }`
+
+### Required props
+- `kind`
+
+### Optional props
+- `payload`
+- usual visual/layout props
+
+### Defaults
+- width = `fit()`
+- height = `fit()`
+
+### Lowering
+Returns one node with `Decl.CustomLeaf`.
 
 ## 7. Container constructors
 
 Containers are two-stage combinators:
 
 ```lua
-container { props } { children }
+ui.container { props } { children }
 ```
 
-Stage 1 returns a callable/continuation awaiting a child list.
-
-Stage 2 accepts one children list table.
+Stage 1 returns a continuation awaiting children.
+Stage 2 accepts one child list table.
 
 ## 7.1 Common container props
 
-- `id?`
-- `visible_when?`
-- `enabled_when?`
-- `width?`
-- `height?`
-- `padding?`
-- `gap?`
-- `align_x?`
-- `align_y?`
-- `background?`
-- `border?`
-- `radius?`
-- `opacity?`
-- `clip?`
-- `floating?`
-- `aspect_ratio?`
-- `hover?`
-- `press?`
-- `focus?`
-- `wheel?`
-- `cursor?`
-- `action?`
-
-## 7.2 `row { props } { children }`
-
-### Lowering
-Node with `layout.axis = Row`.
-
-## 7.3 `column { props } { children }`
-
-### Lowering
-Node with `layout.axis = Column`.
-
-## 7.4 `stack { props } { children }`
-
-### v1 status
-Authoring sugar only.
-
-### Lowering
-Must lower to ordinary core node structure without extending the ASDL.
-
-## 7.5 `scroll_region { props } { children }`
-
-### Additional props
-- `horizontal?`
-- `vertical?`
-- `scroll_x?`
-- `scroll_y?`
-
-### Lowering
-Clipped container node.
-
-### Lowering policy
-- explicit `scroll_x` / `scroll_y` become clip child offsets
-- runtime-managed scrolling remains compatible with the same clip structure
-
-## 7.6 `tooltip { props } { children }`
-
-### Additional props
+Common supported props include:
+- `id`
+- `visible_when`
+- `enabled_when`
+- `width`
+- `height`
+- `padding`
+- `gap`
+- `align_x`
+- `align_y`
+- `background`
+- `border`
+- `radius`
+- `opacity`
+- `horizontal`
+- `vertical`
+- `scroll_x`
+- `scroll_y`
 - `target`
-- `element_point?`
-- `parent_point?`
-- `offset_x?`
-- `offset_y?`
-- `expand_w?`
-- `expand_h?`
-- `z_index?`
-- `pointer_capture?`
+- `float_target`
+- `element_point`
+- `parent_point`
+- `offset_x`
+- `offset_y`
+- `expand_w`
+- `expand_h`
+- `z_index`
+- `pointer_capture`
+- `hover`
+- `press`
+- `focus`
+- `wheel`
+- `cursor`
+- `action`
+- `aspect_ratio`
+
+## 7.2 `ui.row { props } { children }`
 
 ### Lowering
-Floating container node.
+Returns a node with:
+- `layout.axis = Row`
+- default width = `grow()`
+- default height = `grow()`
+
+## 7.3 `ui.column { props } { children }`
+
+### Lowering
+Returns a node with:
+- `layout.axis = Column`
+- default width = `grow()`
+- default height = `grow()`
+
+## 7.4 `ui.stack { props } { children }`
+
+### Current status
+Implemented as:
+- alias of `ui.column`
+
+It is authoring sugar only in the current implementation.
+
+## 7.5 `ui.scroll_region { props } { children }`
+
+### Current lowering
+- axis = `Column`
+- width/height default to `grow()`
+- `wheel = true` by default
+- `horizontal`, `vertical`, `scroll_x`, `scroll_y` lower into `Decl.Clip`
+
+### Important note
+The current implementation uses authored `scroll_x` / `scroll_y` expressions directly as clip child offsets.
+
+## 7.6 `ui.tooltip { props } { children }`
+
+### Current lowering
+- axis = `Column`
+- width/height default to `fit()`
+- floating config is produced only if `target` or `float_target` is supplied
 
 ## 8. Child list contract
 
 The second table in a container call is always a child list.
 
-Example:
-
-```lua
-row { gap = 8 } {
-    label { text = "A" },
-    label { text = "B" },
-}
-```
-
-### Allowed entries
-- node descriptor
+Allowed entries:
+- `Decl.Node`
 - `nil`
-- fragment
-- result of `each(...)`
-- result of `when(...)`
-- nested fragment/list forms accepted by the builder implementation
+- fragments
+- nested Lua arrays of valid child entries
+- results of `each`, `when`, `maybe`
 
-### Not allowed
-- keyed props records pretending to be children
-- arbitrary non-node scalar values
+Not allowed:
+- arbitrary scalars
+- malformed tables pretending to be nodes
 
 ## 9. Child fragment helpers
 
-## 9.1 `each(xs, fn)`
+## 9.1 `ui.each(xs, fn)`
 
 ### Form
 ```lua
-each(xs, function(x, i) ... end)
+ui.each(xs, function(x, i) ... end)
 ```
 
-### Returns
-A fragment-like child producer.
+### Current semantics
+Iterates immediately in Lua and returns a fragment of produced children.
 
-### Contract
-- iteration order must be deterministic
-- `fn` may return node, fragment, list, or `nil`
+## 9.2 `ui.when(cond, child)`
 
-## 9.2 `when(cond, child)`
+Returns:
+- `child` when `cond` is truthy
+- empty fragment otherwise
 
-### Form
-```lua
-when(cond, child)
-```
+## 9.3 `ui.maybe(child)`
 
-### Returns
-A fragment-like conditional child.
+Returns:
+- `child` when non-`nil`
+- empty fragment otherwise
 
-## 9.3 `maybe(child)`
+## 9.4 `ui.fragment { children }`
 
-### Form
-```lua
-maybe(child)
-```
-
-### Returns
-`child` or empty fragment semantics.
-
-## 9.4 `fragment { children }`
-
-### Form
-```lua
-fragment {
-    label { text = "A" },
-    label { text = "B" },
-}
-```
-
-### Returns
-A flattenable child fragment.
+Explicit child grouping helper for flattening.
 
 ## 10. Value helpers
-
-These remain ordinary function-style helpers.
 
 ## 10.1 Identity helpers
 
 ```lua
-stable "root"
-indexed("asset_row", i)
+ui.stable("root")
+ui.indexed("asset_row", i)
 ```
 
 ## 10.2 Layout helpers
 
 ```lua
-grow(min?, max?)
-fit(min?, max?)
-fixed(value)
-percent(value)
-pad(left, top, right, bottom)
+ui.grow(min?, max?)
+ui.fit(min?, max?)
+ui.fixed(value)
+ui.percent(value)
+ui.pad(x)
+ui.pad(left, top, right, bottom)
 ```
 
 ## 10.3 Visual helpers
 
 ```lua
-rgba(r, g, b, a)
-vec2(x, y)
-border {
+ui.rgba(r, g, b, a)
+ui.vec2(x, y)
+ui.border {
     left = ...,
     top = ...,
     right = ...,
@@ -567,115 +566,111 @@ border {
     between_children = ...,
     color = ...,
 }
-radius(tl, tr, br, bl)
+ui.radius(tl)
+ui.radius(tl, tr, br, bl)
 ```
 
 ## 10.4 Expression helpers
 
 ```lua
-call(fn, ...)
-select(cond, yes, no)
-theme(name)
-env(name)
-param_ref(name)
-state_ref(name)
+ui.call(fn, ...)
+ui.select(cond, yes, no)
+ui.theme(name)
+ui.env(name)
+ui.param_ref(name)
+ui.state_ref(name)
 ```
 
-## 11. Defaulting rules
+## 11. Public entrypoint helpers
 
-The implementation should define explicit defaults.
+`lib/terraui.t` currently exports:
 
-Recommended baseline defaults:
-- `visible_when = nil`
-- `enabled_when = nil`
-- `gap = 0`
-- `padding = pad(0, 0, 0, 0)`
-- `align_x = ui.align_x.left`
-- `align_y = ui.align_y.top`
-- no decor unless widget/helper adds one
-- no clip unless explicitly requested
-- no floating unless explicitly requested
-- interaction flags default false
-
-Widget helpers may layer stronger defaults on top.
-
-## 12. Lowering guarantees
-
-```mermaid
-flowchart LR
-    A[component / row / label DSL] --> B[descriptor normalization]
-    B --> C[Decl helper values]
-    C --> D[Decl nodes / params / state]
-    D --> E[Decl.Component]
+```lua
+terraui.schema
+terraui.types
+terraui.dsl
+terraui.bind
+terraui.plan
+terraui.compile_plan
+terraui.compile
 ```
 
-The DSL implementation must guarantee:
-1. deterministic child order
-2. deterministic param/state order
-3. deterministic id lowering
-4. no hidden runtime widget kinds
-5. container children are derived only from the second brace child list
+## 12. Compile entry
+
+### `terraui.compile(decl_component, opts)`
+
+Runs the full pipeline:
+
+```text
+Decl -> Bound -> Plan -> Kernel
+```
+
+Returns `Kernel.Component`.
+
+### `terraui.compile_plan(plan_component)`
+
+Compiles a precomputed `Plan.Component`.
+
+### Memoization note
+The public compile path is memoized using Terra's memoization machinery and a deterministic key derived from `Plan.Component.key`.
 
 ## 13. Error contract
 
-The DSL/builders should fail fast on:
-- malformed component records
-- missing required props
-- duplicate param/state names
+The current builders fail fast on:
+- missing required props for several widgets
+- malformed component root
 - invalid child entries
-- malformed child fragments
-- invalid percent values
-- invalid ids
-- duplicate stable ids after resolution
-- v1 leaf+children conflicts
+- malformed ids / sizes / padding inputs
 
-## 14. Canonical minimal surface
+Still future work:
+- strict unknown-prop validation
+- richer type checking at DSL capture time
+
+## 14. Canonical minimal shipped surface
 
 ```lua
-component "name" { ... }
-param "name" { ... }
-state "name" { ... }
+ui.component("name") { ... }
+ui.param("name") { ... }
+ui.state("name") { ... }
 
-row { ... } { ... }
-column { ... } { ... }
-stack { ... } { ... }
-scroll_region { ... } { ... }
-tooltip { ... } { ... }
+ui.row { ... } { ... }
+ui.column { ... } { ... }
+ui.stack { ... } { ... }
+ui.scroll_region { ... } { ... }
+ui.tooltip { ... } { ... }
 
-label { ... }
-button { ... }
-image_view { ... }
-spacer { ... }
-custom { ... }
+ui.label { ... }
+ui.button { ... }
+ui.image_view { ... }
+ui.spacer { ... }
+ui.custom { ... }
 
-each(xs, fn)
-when(cond, child)
-maybe(child)
-fragment { ... }
+ui.each(xs, fn)
+ui.when(cond, child)
+ui.maybe(child)
+ui.fragment { ... }
 
-stable "id"
-indexed("id", i)
-grow(...)
-fit(...)
-fixed(...)
-percent(...)
-pad(...)
-rgba(...)
-vec2(...)
-border { ... }
-radius(...)
-call(...)
-select(...)
-theme(...)
-env(...)
-param_ref(...)
-state_ref(...)
+ui.stable("id")
+ui.indexed("id", i)
+ui.grow(...)
+ui.fit(...)
+ui.fixed(...)
+ui.percent(...)
+ui.pad(...)
+ui.rgba(...)
+ui.vec2(...)
+ui.border { ... }
+ui.radius(...)
+ui.call(...)
+ui.select(...)
+ui.theme(...)
+ui.env(...)
+ui.param_ref(...)
+ui.state_ref(...)
 ```
 
 ## 15. Design conclusion
 
-The builder/reference surface should now be considered standardized around:
+The current builder/reference surface is now standardized around:
 
-> leaves use one props record, containers use props record followed by child-list record.
-
-That is the canonical TerraUI v1 public syntax.
+> leaves use one props record, containers use props record followed by a child-list record, and the entire surface lowers directly into `Decl.*`.

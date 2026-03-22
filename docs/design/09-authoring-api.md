@@ -1,6 +1,6 @@
 # TerraUI Authoring API
 
-Status: draft v0.4  
+Status: implementation-aligned v0.5  
 Purpose: define the public user-facing API that lowers into `Decl`.
 
 ## Canonical lower layers
@@ -10,20 +10,43 @@ This document sits on top of:
 - `docs/design/terraui.asdl`
 - `docs/design/07-method-contracts.md`
 - `docs/design/08-context-contracts.md`
+- `lib/dsl.t`
+- `lib/terraui.t`
 
 It defines the surface that users write, and how that surface maps into the compiler IR.
 
-## 1. Main design decision
+## 1. Current implementation snapshot
 
-For v1, TerraUI should expose a:
+As of the current implementation, TerraUI ships a **capture-time declarative DSL** that lowers directly into `Decl.*` values.
+
+Important clarification:
+
+- the DSL is real and implemented
+- child helpers such as `each`, `when`, `maybe`, and `fragment` operate at **capture time in Lua**, not as runtime dynamic node replication inside the kernel
+- the current public compile path is:
+
+```text
+Decl DSL -> bind -> plan -> compile -> Kernel.Component
+```
+
+The public entrypoint is:
+
+```lua
+local terraui = require("lib/terraui")
+local ui = terraui.dsl()
+```
+
+## 2. Main design decision
+
+For v1, TerraUI exposes a:
 
 > declarative immediate-mode combinator DSL that lowers directly into `Decl`
 
 This replaces the earlier callback-heavy builder direction.
 
-## 2. Core syntax rule
+## 3. Core syntax rule
 
-The DSL should assign clear meaning to the two brace positions.
+The DSL assigns clear meaning to the two brace positions.
 
 ### First `{ ... }`
 A **record/config table**.
@@ -44,60 +67,50 @@ Used only on container-like combinators.
 
 #### Leaves / widgets
 ```lua
-label  { text = "Hello" }
-button { id = stable "save", text = "Save", action = "save" }
+ui.label  { text = "Hello" }
+ui.button { id = ui.stable("save"), text = "Save", action = "save" }
 ```
 
 #### Containers
 ```lua
-row { gap = 8 } {
-    label  { text = "A" },
-    button { text = "B" },
+ui.row { gap = 8 } {
+    ui.label  { text = "A" },
+    ui.button { text = "B" },
 }
 ```
 
 #### Component
 ```lua
-component "demo" {
-    root = column { ... } { ... }
+ui.component("demo") {
+    root = ui.column { ... } { ... }
 }
 ```
 
-This is the semantic rule:
+Semantic rule:
 
 > first table = keyed record, second table = ordered child list.
-
-## 3. Why this shape is preferred
-
-It gives TerraUI a coherent Lua DSL:
-- no callback noise for ordinary static structure
-- no ambiguity about the role of braces
-- props and children are visually distinct by position
-- child order is explicit in the literal sequence
-- the syntax still lowers naturally into `Decl`
 
 ## 4. High-level model
 
 ```mermaid
 flowchart LR
-    A[User DSL expressions] --> B[Declarative node descriptors]
-    B --> C[Decl.Component]
-    C --> D[Bound.Component]
-    D --> E[Plan.Component]
-    E --> F[Kernel.Component]
+    A[ui.* DSL] --> B[Decl.Component]
+    B --> C[Bound.Component]
+    C --> D[Plan.Component]
+    D --> E[Kernel.Component]
 ```
 
 ## 5. Public API layers
 
 ### 5.1 Layer 1 — structural combinators
 
-These map closely to `Decl`:
+Implemented now:
 - `component`
 - `param`
 - `state`
 - `row`
 - `column`
-- `stack`
+- `stack` (currently alias of `column`)
 - `scroll_region`
 - `tooltip`
 - `label`
@@ -108,10 +121,11 @@ These map closely to `Decl`:
 
 ### 5.2 Layer 2 — expression and value helpers
 
-These construct `Decl.Expr` forms or typed helper values:
+Implemented now:
 - `rgba`
 - `vec2`
 - `grow`
+- `fit`
 - `fixed`
 - `percent`
 - `pad`
@@ -121,114 +135,99 @@ These construct `Decl.Expr` forms or typed helper values:
 - `indexed`
 - `theme`
 - `env`
+- `param_ref`
+- `state_ref`
 - `call`
 - `select`
-- etc.
+- `num`
+- `str`
+- `bool`
+- `as_expr`
 
 ### 5.3 Layer 3 — child fragment helpers
 
-These make dynamic child generation possible inside the second brace:
-- `each(...)`
-- `when(...)`
-- `maybe(...)`
+Implemented now:
+- `each(xs, fn)`
+- `when(cond, child)`
+- `maybe(child)`
 - `fragment { ... }`
+
+### Important constraint
+
+These helpers are **capture-time** helpers. They help build the authored `Decl` tree in Lua. They do **not** currently imply runtime-varying child counts inside the compiled kernel.
 
 ## 6. Canonical authoring style
 
-Example:
-
 ```lua
+local terraui = require("lib/terraui")
 local ui = terraui.dsl()
 
-local component     = ui.component
-local param         = ui.param
-local state         = ui.state
-local column        = ui.column
-local row           = ui.row
-local label         = ui.label
-local button        = ui.button
-local image_view    = ui.image_view
-local scroll_region = ui.scroll_region
-
-local stable        = ui.stable
-local indexed       = ui.indexed
-local grow          = ui.grow
-local fixed         = ui.fixed
-local pad           = ui.pad
-local rgba          = ui.rgba
-local types         = ui.types
-```
-
-Then:
-
-```lua
-local decl =
-component "demo_inspector" {
+local decl = ui.component("demo_inspector") {
     params = {
-        param "preview_image" { type = types.image },
+        ui.param("preview_image") { type = ui.types.image },
+        ui.param("title") { type = ui.types.string, default = "Inspector" },
     },
 
     state = {
-        state "scroll_y" { type = types.number, initial = 0 },
+        ui.state("scroll_y") { type = ui.types.number, initial = 0 },
     },
 
-    root =
-        column {
-            id = stable "root",
-            width = grow(),
-            height = grow(),
-            background = rgba(0.07, 0.07, 0.09, 1.0),
+    root = ui.column {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.grow(),
+        background = ui.rgba(0.07, 0.07, 0.09, 1.0),
+        gap = 12,
+    } {
+        ui.row {
+            id = ui.stable("toolbar"),
+            height = ui.fixed(48),
+            padding = ui.pad(12),
+            gap = 10,
         } {
-            row {
-                id = stable "toolbar",
-                height = fixed(48),
-                padding = pad(12, 10, 12, 10),
-                gap = 10,
+            ui.label  { id = ui.stable("title"), text = ui.param_ref("title") },
+            ui.button { id = ui.stable("btn_save"),  text = "Save",  action = "save"  },
+            ui.button { id = ui.stable("btn_build"), text = "Build", action = "build" },
+        },
+
+        ui.row {
+            id = ui.stable("body"),
+            width = ui.grow(),
+            height = ui.grow(),
+        } {
+            ui.scroll_region {
+                id = ui.stable("left_panel"),
+                width = ui.fixed(260),
+                height = ui.grow(),
+                vertical = true,
+                scroll_y = ui.state_ref("scroll_y"),
             } {
-                label  { id = stable "title", text = "TerraUI Demo" },
-                button { id = stable "btn_save",  text = "Save",  action = "save"  },
-                button { id = stable "btn_build", text = "Build", action = "build" },
-                button { id = stable "btn_run",   text = "Run",   action = "run"   },
+                ui.each({1,2,3}, function(i)
+                    return ui.button {
+                        id = ui.indexed("asset_row", i),
+                        text = "Asset " .. tostring(i),
+                        action = "select_asset",
+                    }
+                end),
             },
 
-            row {
-                id = stable "body",
-                width = grow(),
-                height = grow(),
+            ui.column {
+                id = ui.stable("right_panel"),
+                width = ui.grow(),
+                height = ui.grow(),
+                padding = ui.pad(16),
+                gap = 12,
             } {
-                scroll_region {
-                    id = stable "left_panel",
-                    width = fixed(260),
-                    height = grow(),
-                    vertical = true,
-                } {
-                    each({1,2,3}, function(i)
-                        return button {
-                            id = indexed("asset_row", i),
-                            text = "Asset " .. tostring(i),
-                            action = "select_asset",
-                        }
-                    end),
-                },
-
-                column {
-                    id = stable "right_panel",
-                    width = grow(),
-                    height = grow(),
-                    padding = pad(16, 16, 16, 16),
-                    gap = 12,
-                } {
-                    label { id = stable "panel_title", text = "Inspector" },
-
-                    image_view {
-                        id = stable "preview",
-                        image = ui.param_ref "preview_image",
-                        aspect_ratio = 16/9,
-                        fit = ui.image_fit.contain,
-                    },
+                ui.label { text = "Preview" },
+                ui.image_view {
+                    id = ui.stable("preview"),
+                    image = ui.param_ref("preview_image"),
+                    aspect_ratio = 16/9,
+                    fit = ui.image_fit.contain,
                 },
             },
         },
+    },
 }
 ```
 
@@ -237,7 +236,7 @@ component "demo_inspector" {
 Canonical shape:
 
 ```lua
-component "name" {
+ui.component("name") {
     params = { ... },
     state = { ... },
     root = ...,
@@ -252,259 +251,152 @@ component "name" {
 - `state`
 
 ### Lowering
-This form constructs one `Decl.Component`.
+Produces `Decl.Component`.
 
 ## 8. Param and state declarations
 
-## 8.1 Param declaration
-
-Canonical form:
-
+### Param declaration
 ```lua
-param "preview_image" { type = types.image }
-param "title" { type = types.string, default = "Hello" }
+ui.param("preview_image") { type = ui.types.image }
+ui.param("title") { type = ui.types.string, default = "Hello" }
 ```
 
-### Lowering
-- produces one `Decl.Param`
-- can also serve as an authoring declaration item inside `params = { ... }`
+Lowers to `Decl.Param`.
 
-## 8.2 State declaration
-
-Canonical form:
-
+### State declaration
 ```lua
-state "scroll_y" { type = types.number, initial = 0 }
+ui.state("scroll_y") { type = ui.types.number, initial = 0 }
 ```
 
-### Lowering
-- produces one `Decl.StateSlot`
+Lowers to `Decl.StateSlot`.
 
-## 8.3 Param/state references
-
-Expression helpers should remain available:
-
+### Param/state references
 ```lua
-ui.param_ref "preview_image"
-ui.state_ref "scroll_y"
+ui.param_ref("preview_image")
+ui.state_ref("scroll_y")
 ```
 
-These lower to:
+Lower to:
 - `Decl.ParamRef(name)`
 - `Decl.StateRef(name)`
 
 ## 9. Structural combinators
 
-## 9.1 Leaves
+### Leaves
+Implemented leaf/widget constructors:
+- `ui.label { ... }`
+- `ui.button { ... }`
+- `ui.image_view { ... }`
+- `ui.spacer { ... }`
+- `ui.custom { ... }`
 
-Leaves consume one props record and return a node descriptor.
+These return `Decl.Node` values with an appropriate `leaf` payload or no leaf for `spacer`.
 
-Examples:
-```lua
-label { text = "Hello" }
-button { text = "Save", action = "save" }
-image_view { image = preview_image }
-spacer { width = fixed(8) }
-```
+### Containers
+Implemented container constructors:
+- `ui.row { ... } { ... }`
+- `ui.column { ... } { ... }`
+- `ui.stack { ... } { ... }`
+- `ui.scroll_region { ... } { ... }`
+- `ui.tooltip { ... } { ... }`
 
-## 9.2 Containers
-
-Containers consume a props record, then a children sequence.
-
-Examples:
-```lua
-row { gap = 8 } {
-    label { text = "A" },
-    label { text = "B" },
-}
-
-column { padding = pad(16,16,16,16) } {
-    ...
-}
-```
-
-### Important rule
-The second brace is always a child list, never another props record.
+These return `Decl.Node` values with normalized child lists.
 
 ## 10. Child sequence semantics
 
 A container child sequence may contain:
-- node descriptors
+- a `Decl.Node`
 - `nil`
-- child fragments
-- nested child lists/fragments produced by helpers
+- `fragment`
+- nested Lua arrays of valid child entries
+- the result of `each`, `when`, or `maybe`
 
-The builder must flatten these deterministically.
+Flattening is deterministic and happens during DSL capture.
 
-## 11. Dynamic child helpers
+## 11. Current lowering notes for special combinators
 
-## 11.1 `each(xs, fn)`
+### `scroll_region`
+Current lowering:
+- axis = `Column`
+- width/height default to `grow()`
+- `wheel = true` by default
+- `horizontal`, `vertical`, `scroll_x`, `scroll_y` lower into `Decl.Clip`
 
-Used for repeated children.
+### `tooltip`
+Current lowering:
+- axis = `Column`
+- width/height default to `fit()`
+- floating is only created if `target` / `float_target` is provided in props
 
-Example:
+### `stack`
+Current status:
+- implemented as an alias of `column`
+- not yet a distinct layout mode
 
-```lua
-scroll_region { id = stable "left_panel" } {
-    each(assets, function(asset, i)
-        return button {
-            id = indexed("asset_row", i),
-            text = asset.name,
-            action = "select_asset",
-        }
-    end),
-}
-```
-
-### Contract
-- iteration order must be deterministic
-- `fn` must return node, fragment, list, or `nil`
-
-## 11.2 `when(cond, child)`
-
-Used for conditional children.
-
-Example:
-
-```lua
-column { id = stable "root" } {
-    label { text = "Header" },
-    when(show_preview,
-        image_view { image = preview }
-    ),
-}
-```
-
-## 11.3 `maybe(child)`
-
-Simple nil-tolerant child wrapper.
-
-## 11.4 `fragment { ... }`
-
-Used for explicit child grouping in declarative form.
-
-Example:
-
-```lua
-row { gap = 8 } {
-    fragment {
-        label { text = "A" },
-        label { text = "B" },
-    },
-}
-```
-
-## 12. Expression/value helper shape
-
-Helper families should stay expression-oriented and simple.
-
-### Examples
-```lua
-stable "root"
-indexed("asset_row", i)
-rgba(0.1, 0.1, 0.12, 1.0)
-pad(12, 10, 12, 10)
-grow()
-fixed(48)
-percent(0.5)
-call("to_string", count)
-select(cond, yes, no)
-```
-
-### Rule
-Use ordinary Lua function-call syntax for non-table data-producing helpers.
-
-This keeps the brace meanings reserved for declarative records and child lists.
-
-## 13. Widget sugar policy
+## 12. Widget sugar policy
 
 Widgets remain sugar over ordinary node construction.
 
-### Examples
+Examples:
 - `label { ... }` -> node + text leaf
-- `button { ... }` -> interactive node + text leaf + button defaults
+- `button { ... }` -> interactive node + text leaf + defaults
 - `image_view { ... }` -> node + image leaf
 - `scroll_region { ... } { ... }` -> clipped container node
-- `tooltip { ... } { ... }` -> floating container node
+- `tooltip { ... } { ... }` -> floating container node when target props are present
 
 No new runtime widget kinds are introduced by the public syntax.
 
-## 14. Identity policy
+## 13. Identity policy
 
-Identity helpers:
+Preferred public identity helpers:
 
 ```lua
-stable "name"
-indexed("name", i)
+ui.stable("name")
+ui.indexed("name", i)
 ```
 
-These are preferred over raw string ids for clarity in the DSL.
+Raw string ids also work in the current implementation and lower to stable ids.
 
-Auto ids may still exist, but explicit stable/indexed ids should be the primary public style in v1 examples.
+## 14. Error behavior
 
-## 15. Error behavior
+The current DSL fails early on:
+- missing required props for several widgets (`label.text`, `button.text`, `image_view.image`, `custom.kind`)
+- malformed component root
+- invalid child entries
+- invalid ids / size / padding inputs
 
-The authoring layer should fail early on:
-- malformed component records
-- missing `root`
-- invalid param/state declarations
-- duplicate param/state names
-- duplicate stable ids after resolution
-- invalid child entries in child lists
-- invalid props keys in strict mode
-- v1 leaf+children structural conflicts
+Further strict-key validation is still future work.
 
-## 16. Where `__methodmissing` fits
+## 15. Where `__methodmissing` fits
 
-Following `terra-compiler-pattern.md`:
-- the public authoring DSL itself does **not** need `__methodmissing`
-- the DSL is just declarative capture lowering into `Decl`
-- `__methodmissing` belongs later on generated Terra types when Terra syntax itself should trigger compile-time specialization
+Per `terra-compiler-pattern.md`:
+- the public authoring DSL does **not** use `__methodmissing`
+- the DSL is plain Lua capture lowering into `Decl`
+- `__methodmissing` remains a tool for generated Terra runtime/backend types when Terra syntax itself should trigger compile-time specialization
 
-So the stack is:
+## 16. Public compile entry
 
-```mermaid
-flowchart LR
-    A[Authoring DSL] --> B[Decl]
-    B --> C[Bound]
-    C --> D[Plan]
-    D --> E[Kernel]
-    E --> F[Generated Terra types may use __methodmissing]
-```
+The public entrypoint currently lives in:
 
-## 17. Canonical syntax summary
+- `lib/terraui.t`
 
-### Leaves
-```lua
-label { ... }
-button { ... }
-image_view { ... }
-```
+Main functions:
+- `terraui.dsl()`
+- `terraui.bind(decl, opts)`
+- `terraui.plan(bound)`
+- `terraui.compile_plan(plan_component)`
+- `terraui.compile(decl, opts)`
 
-### Containers
-```lua
-row { ... } { ... }
-column { ... } { ... }
-scroll_region { ... } { ... }
-```
+`terraui.compile(...)` runs the full pipeline and returns `Kernel.Component`.
 
-### Component
-```lua
-component "name" { ... }
-```
+## 17. Memoization note
 
-### Child helpers
-```lua
-each(xs, fn)
-when(cond, child)
-maybe(child)
-fragment { ... }
-```
+The public compile entry is memoized.
+
+Current implementation memoizes by a deterministic string derived from `Plan.Component.key`. That gives a stable public caching path without adding a custom heavyweight cache layer beyond Terra's own memoization machinery.
 
 ## 18. Design conclusion
 
-The public TerraUI syntax should now be considered:
+The shipped v1 authoring surface is now:
 
-> leaves use one brace record, containers use record-then-children double braces.
-
-This is the first authoring shape that is both Lua-idiomatic and semantically coherent enough to standardize.
+> a capture-time declarative DSL where leaves use one props record, containers use props record plus child-list record, and the result lowers directly into `Decl.*`.

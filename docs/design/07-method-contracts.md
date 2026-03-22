@@ -100,6 +100,41 @@ flowchart LR
     E --> F[Kernel.Component]
 ```
 
+## 3.1 Current implementation snapshot
+
+As of the current implementation:
+
+### Fully implemented families
+- `Decl.*:bind`
+- `Bound.*:plan`
+- `Bound.Value:plan_binding`
+- `Plan.Component:compile`
+- `Plan.Binding:compile_number`
+- `Plan.Binding:compile_bool`
+- `Plan.Binding:compile_string`
+- `Plan.Binding:compile_color` (const/slot coverage used by current kernel)
+- `Plan.Binding:compile_vec2` (const coverage)
+- `Kernel.Component:frame_type`
+- `Kernel.Component:run_quote`
+
+### Implemented plan codegen semantics
+- layout
+- intrinsic text measurement placeholder
+- fit/grow/fixed/percent sizing
+- alignment
+- aspect ratio
+- clip child offsets
+- floating placement
+- hit testing
+- basic input transitions
+- rect/border/text/image/custom/scissor emission
+- guard evaluation for visible/enabled
+
+### Still partial / backend-placeholder
+- text measurement is currently a simple placeholder, not a real font backend contract
+- image/custom intrinsic measurement is still minimal
+- stream emit functions exist at the kernel level, but presenter/backend replay is still outside the current implementation
+
 ## 4. Decl-phase method contracts
 
 These methods convert authored syntax into canonical bound forms.
@@ -564,6 +599,10 @@ Generate hit-testing logic for one node.
 
 - clip ancestry is respected
 
+### Current implementation note
+
+Implemented. The current kernel uses effective per-node clip bounds computed during layout and tests pointer coordinates against both node rect and clip rect.
+
 ## 6.4 `Plan.SizeRule:compile_axis(CompileCtx, string axis_name) -> TerraQuote`
 
 ### Purpose
@@ -591,6 +630,10 @@ Emit node-local visual commands for the node’s paint data.
 
 Clip begin/end for descendants is a subtree concern, not merely local paint.
 
+### Current implementation note
+
+This is implemented. Node-local paint emits rect and border commands; subtree clip bracketing is emitted separately by `ClipSpec:compile_emit_begin/end`.
+
 ## 6.6 `Plan.InputSpec:compile_input(CompileCtx, number node_index) -> TerraQuote`
 
 ### Purpose
@@ -602,6 +645,10 @@ Generate interaction logic for one node’s input policy.
 - handle hover/press/focus/wheel flags
 - respect node visibility/enabled state
 - cooperate with runtime input record format
+
+### Current implementation note
+
+Basic press/release/focus/action behavior is implemented. Wheel-specific runtime behavior is not yet fleshed out.
 
 ## 6.7 `Plan.ClipSpec:compile_apply(CompileCtx) -> TerraQuote`
 
@@ -624,6 +671,10 @@ Emit the backend clip/scissor begin command for this clip region.
 
 - output can participate in subtree-scoped clip bracketing
 
+### Current implementation note
+
+Implemented via high-level `ScissorCmd` begin packets.
+
 ## 6.9 `Plan.ClipSpec:compile_emit_end(CompileCtx) -> TerraQuote`
 
 ### Purpose
@@ -633,6 +684,10 @@ Emit the matching backend clip/scissor end command.
 ### Must guarantee
 
 - correctly pairs with begin during subtree replay
+
+### Current implementation note
+
+Implemented via matching high-level `ScissorCmd` end packets.
 
 ## 6.10 `Plan.TextSpec:compile_measure(CompileCtx, Plan.MeasureMode) -> TerraQuote`
 
@@ -646,6 +701,14 @@ Generate text measurement logic for one dimension.
 - respect wrap, align, font, spacing, and line-height settings
 - return width or height according to `MeasureMode`
 
+### Current implementation note
+
+The current implementation satisfies the structural contract but still uses a placeholder text metric:
+- width ~= `strlen(text) * font_size * 0.6`
+- height ~= `font_size * line_height`
+
+This is enough for kernel/layout validation, but it is not yet the final text-backend contract described elsewhere in the docs.
+
 ## 6.11 `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
 
 ### Purpose
@@ -656,6 +719,10 @@ Emit one high-level text draw command.
 
 - emit text command data only
 - not shape glyphs directly in kernel code
+
+### Current implementation note
+
+This is implemented. The current kernel emits high-level `TextCmd` values carrying text/style/rect data. Glyph shaping is still external to the kernel.
 
 ## 6.12 `Plan.ImageSpec:compile_emit(CompileCtx) -> TerraQuote`
 
@@ -668,6 +735,10 @@ Emit one image draw command.
 - preserve fit mode
 - cooperate with node-level aspect ratio semantics
 
+### Current implementation note
+
+This is implemented at the stream-emission level. Image intrinsic measurement is still minimal.
+
 ## 6.13 `Plan.CustomSpec:compile_emit(CompileCtx) -> TerraQuote`
 
 ### Purpose
@@ -678,6 +749,10 @@ Emit one custom draw command.
 
 - preserve custom kind
 - preserve payload reference/value
+
+### Current implementation note
+
+The current kernel emits `CustomCmd` with rect + `kind`. Payload preservation at backend replay level is still minimal in v1.
 
 ## 6.14 `Plan.FloatSpec:compile_place(CompileCtx) -> TerraQuote`
 
@@ -691,6 +766,10 @@ Generate floating placement logic.
 - map attach points to coordinates
 - apply offsets and expansion
 - set z-index semantics for floating node placement
+
+### Current implementation note
+
+This is implemented for the current static-tree kernel. Floating nodes are removed from normal flow, then placed in a later layout pass against their resolved target.
 
 ## 6.15 `Plan.Binding:compile_bool(CompileCtx) -> TerraQuote`
 

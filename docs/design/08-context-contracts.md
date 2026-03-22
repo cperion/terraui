@@ -330,6 +330,20 @@ Important reminder from `terra-compiler-pattern.md`:
 - provide text measurement support
 - optionally expose runtime scroll helpers
 
+## 6.1.1 Current implementation snapshot
+
+The current `lib/compile.t` implementation already provides:
+- generated params/state/frame types
+- generated node/input/hit runtime types
+- concrete command structs for rect/border/text/image/scissor/custom
+- binding compilation for the value kinds used by the current kernel
+- layout, hit, input, and emit function generation
+
+Still intentionally partial:
+- no separate backend object yet
+- text measurement is still placeholder logic rather than a real font backend hook
+- command constructor/layout APIs are currently encoded directly in `lib/compile.t` rather than exposed as a fully factored backend surface
+
 ## 6.2 CompileCtx contract surface
 
 The design discussion converged on a surface like this:
@@ -386,6 +400,13 @@ CompileCtx = {
     set_scroll_offset_y = function(self, frame_q, node_index, value_q) -> TerraQuote end,
 }
 ```
+
+### Current implementation note
+
+The current implementation has the same overall role, but a narrower concrete shape:
+- most services are implemented as direct methods/helpers inside `lib/compile.t`
+- command structs are synthesized directly rather than via a fully abstract backend callback layer
+- the future fully-factored backend surface above is still the intended long-term contract
 
 ## 6.3 Runtime type synthesis methods
 
@@ -534,6 +555,10 @@ local compile_component = terralib.memoize(function(plan_key, cc)
     return kernel_component
 end)
 ```
+
+### Current implementation note
+
+The public compile entry in `lib/terraui.t` is already memoized. The current key is a deterministic string derived from `Plan.Component.key`. That is sufficient for the current implementation, though the long-term design may still move to a cleaner structurally-unique key story.
 
 Practical consequences:
 - the compiler entry point is memoized by Terra itself
