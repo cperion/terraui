@@ -14,6 +14,9 @@ local TerraUI = require("lib/terraui_schema")
 local Decl = TerraUI.types.Decl
 local Plan = TerraUI.types.Plan
 local Kernel = TerraUI.types.Kernel
+local C = terralib.includecstring [[
+    #include <string.h>
+]]
 
 ---------------------------------------------------------------------------
 -- Shared runtime types
@@ -263,7 +266,7 @@ end
 -- Size rule helpers / methods
 ---------------------------------------------------------------------------
 
-local function resolve_size(rule, available, ctx)
+local function resolve_size(rule, available, intrinsic, ctx)
     if rule.kind == "Fixed" then
         return rule.value:compile_number(ctx)
     elseif rule.kind == "Grow" then
@@ -281,8 +284,7 @@ local function resolve_size(rule, available, ctx)
         local frac = rule.value:compile_number(ctx)
         return `[available] * [frac]
     elseif rule.kind == "Fit" then
-        -- v1 placeholder: use available, clamped by min/max.
-        local r = available
+        local r = intrinsic
         if rule.min then
             local mn = rule.min:compile_number(ctx)
             r = `terralib.select([r] < [mn], [mn], [r])
@@ -301,24 +303,108 @@ function Plan.SizeRule:compile_axis(ctx, axis_name)
 end
 
 function Plan.Fit:compile_axis(ctx, axis_name)
-    return resolve_size(self, axis_name, ctx)
+    return resolve_size(self, axis_name, `0.0f, ctx)
 end
 
 function Plan.Grow:compile_axis(ctx, axis_name)
-    return resolve_size(self, axis_name, ctx)
+    return resolve_size(self, axis_name, `0.0f, ctx)
 end
 
 function Plan.Fixed:compile_axis(ctx, axis_name)
-    return resolve_size(self, axis_name, ctx)
+    return resolve_size(self, axis_name, `0.0f, ctx)
 end
 
 function Plan.Percent:compile_axis(ctx, axis_name)
-    return resolve_size(self, axis_name, ctx)
+    return resolve_size(self, axis_name, `0.0f, ctx)
 end
 
 ---------------------------------------------------------------------------
 -- Planned-node layout helpers
 ---------------------------------------------------------------------------
+
+function CompileCtx:direct_children(parent)
+    local children = {}
+    if not parent.first_child or parent.child_count == 0 then
+        return children
+    end
+    local ci = parent.first_child
+    for _ = 1, parent.child_count do
+        local child = self.plan.nodes[ci + 1]
+        children[#children + 1] = child
+        ci = child.subtree_end
+    end
+    return children
+end
+
+function CompileCtx:emit_node_measure(node)
+    local frame = self.frame_sym
+    local i = node.index
+    local stmts = terralib.newlist()
+
+    local pad_l = node.padding_left:compile_number(self)
+    local pad_t = node.padding_top:compile_number(self)
+    local pad_r = node.padding_right:compile_number(self)
+    local pad_b = node.padding_bottom:compile_number(self)
+    local gap_v = node.gap:compile_number(self)
+
+    local leaf_w = `0.0f
+    local leaf_h = `0.0f
+
+    if node.text_slot then
+        local ts = self.plan.texts[node.text_slot + 1]
+        leaf_w = ts:compile_measure(self, Plan.MeasureWidth)
+        leaf_h = ts:compile_measure(self, Plan.MeasureHeight)
+    end
+
+    local children = self:direct_children(node)
+    local child_w = symbol(float, "want_child_w" .. i)
+    local child_h = symbol(float, "want_child_h" .. i)
+
+    stmts:insert(quote
+        var [child_w] = 0.0f
+        var [child_h] = 0.0f
+        [frame].nodes[i].visible = true
+        [frame].nodes[i].enabled = true
+    end)
+
+    local child_count = #children
+    if child_count > 0 then
+        if node.axis == Decl.Row then
+            if child_count > 1 then
+                stmts:insert(quote [child_w] = [gap_v] * [float](child_count - 1) end)
+            end
+            for _, child in ipairs(children) do
+                local ci = child.index
+                stmts:insert(quote
+                    [child_w] = [child_w] + [frame].nodes[ci].want_w
+                    [child_h] = terralib.select([child_h] > [frame].nodes[ci].want_h,
+                                                [child_h],
+                                                [frame].nodes[ci].want_h)
+                end)
+            end
+        else
+            if child_count > 1 then
+                stmts:insert(quote [child_h] = [gap_v] * [float](child_count - 1) end)
+            end
+            for _, child in ipairs(children) do
+                local ci = child.index
+                stmts:insert(quote
+                    [child_h] = [child_h] + [frame].nodes[ci].want_h
+                    [child_w] = terralib.select([child_w] > [frame].nodes[ci].want_w,
+                                                [child_w],
+                                                [frame].nodes[ci].want_w)
+                end)
+            end
+        end
+    end
+
+    stmts:insert(quote
+        [frame].nodes[i].want_w = terralib.select([leaf_w] > [child_w], [leaf_w], [child_w]) + [pad_l] + [pad_r]
+        [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+    end)
+
+    return quote [stmts] end
+end
 
 function CompileCtx:emit_node_content_box(node)
     local frame = self.frame_sym
@@ -357,14 +443,7 @@ function CompileCtx:emit_children_placement(parent)
         var [ch] = [frame].nodes[pi].content_h
     end)
 
-    -- direct children are discovered by walking preorder with subtree_end skips
-    local children = {}
-    local ci = parent.first_child
-    for _ = 1, parent.child_count do
-        local child = plan.nodes[ci + 1]
-        children[#children + 1] = child
-        ci = child.subtree_end
-    end
+    local children = self:direct_children(parent)
 
     local avail_main  = is_row and cw or ch
     local avail_cross = is_row and ch or cw
@@ -372,7 +451,7 @@ function CompileCtx:emit_children_placement(parent)
     local grow_count = 0
     for _, child in ipairs(children) do
         local rule = is_row and child.width or child.height
-        if rule.kind == "Grow" or rule.kind == "Fit" then
+        if rule.kind == "Grow" then
             grow_count = grow_count + 1
         end
     end
@@ -386,20 +465,20 @@ function CompileCtx:emit_children_placement(parent)
         local sym  = symbol(float, "cm" .. child.index)
         child_main[idx] = sym
 
-        if rule.kind == "Fixed" then
-            local val = rule.value:compile_number(self)
+        if rule.kind == "Grow" then
+            stmts:insert(quote var [sym] = 0.0f end)
+        else
+            local intrinsic_main
+            if is_row then
+                intrinsic_main = `[frame].nodes[child.index].want_w
+            else
+                intrinsic_main = `[frame].nodes[child.index].want_h
+            end
+            local val = resolve_size(rule, avail_main, intrinsic_main, self)
             stmts:insert(quote
                 var [sym] = [val]
                 [total_fixed] = [total_fixed] + [sym]
             end)
-        elseif rule.kind == "Percent" then
-            local frac = rule.value:compile_number(self)
-            stmts:insert(quote
-                var [sym] = [avail_main] * [frac]
-                [total_fixed] = [total_fixed] + [sym]
-            end)
-        else
-            stmts:insert(quote var [sym] = 0.0f end)
         end
     end
 
@@ -427,8 +506,6 @@ function CompileCtx:emit_children_placement(parent)
                     r = `terralib.select([r] > [mx], [mx], [r])
                 end
                 stmts:insert(quote [child_main[idx]] = [r] end)
-            elseif rule.kind == "Fit" then
-                stmts:insert(quote [child_main[idx]] = [ge] end)
             end
         end
     end
@@ -440,7 +517,13 @@ function CompileCtx:emit_children_placement(parent)
         local ci_node = child.index
         local main_sz = child_main[idx]
         local cross_rule = is_row and child.height or child.width
-        local cross_sz = resolve_size(cross_rule, avail_cross, self)
+        local intrinsic_cross
+        if is_row then
+            intrinsic_cross = `[frame].nodes[ci_node].want_h
+        else
+            intrinsic_cross = `[frame].nodes[ci_node].want_w
+        end
+        local cross_sz = resolve_size(cross_rule, avail_cross, intrinsic_cross, self)
 
         if is_row then
             stmts:insert(quote
@@ -459,6 +542,12 @@ function CompileCtx:emit_children_placement(parent)
         end
 
         stmts:insert(self:emit_node_content_box(child))
+        stmts:insert(quote
+            [frame].nodes[ci_node].clip_x0 = [frame].nodes[pi].clip_x0
+            [frame].nodes[ci_node].clip_y0 = [frame].nodes[pi].clip_y0
+            [frame].nodes[ci_node].clip_x1 = [frame].nodes[pi].clip_x1
+            [frame].nodes[ci_node].clip_y1 = [frame].nodes[pi].clip_y1
+        end)
         stmts:insert(quote [cur] = [cur] + [main_sz] + [gap_v] end)
     end
 
@@ -475,17 +564,13 @@ function Plan.Node:compile_layout(ctx)
 
     if self.parent == nil then
         local i = self.index
-        local w = self.width:compile_axis(ctx, `[frame].viewport_w)
-        local h = self.height:compile_axis(ctx, `[frame].viewport_h)
+        local w = resolve_size(self.width, `[frame].viewport_w, `[frame].nodes[i].want_w, ctx)
+        local h = resolve_size(self.height, `[frame].viewport_h, `[frame].nodes[i].want_h, ctx)
         stmts:insert(quote
             [frame].nodes[i].x = 0
             [frame].nodes[i].y = 0
             [frame].nodes[i].w = [w]
             [frame].nodes[i].h = [h]
-            [frame].nodes[i].visible = true
-            [frame].nodes[i].enabled = true
-            [frame].nodes[i].want_w = 0
-            [frame].nodes[i].want_h = 0
             [frame].nodes[i].clip_x0 = 0
             [frame].nodes[i].clip_y0 = 0
             [frame].nodes[i].clip_x1 = [frame].viewport_w
@@ -526,8 +611,15 @@ function Plan.ClipSpec:compile_emit_end(ctx)
 end
 
 function Plan.TextSpec:compile_measure(ctx, mode)
-    if mode == Plan.MeasureWidth then return `0.0f end
-    return `0.0f
+    local content = self.content:compile_string(ctx)
+    local font_size = self.font_size:compile_number(ctx)
+    local line_height = self.line_height:compile_number(ctx)
+
+    if mode == Plan.MeasureWidth then
+        return `[float](C.strlen([content])) * [font_size] * 0.6f
+    else
+        return `[font_size] * [line_height]
+    end
 end
 
 function Plan.TextSpec:compile_emit(ctx)
@@ -561,6 +653,12 @@ function CompileCtx:compile_layout_fn()
         [frame].hit.focus = -1
     end)
 
+    -- pass 1: intrinsic measure (postorder)
+    for i = #nodes, 1, -1 do
+        stmts:insert(self:emit_node_measure(nodes[i]))
+    end
+
+    -- pass 2: normal-flow layout (preorder)
     for _, node in ipairs(nodes) do
         stmts:insert(node:compile_layout(self))
     end

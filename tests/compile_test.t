@@ -37,6 +37,29 @@ local function make_node(name, axis, w, h, pad, gap, children)
         children or List())
 end
 
+local function text_style(font_size)
+    return Decl.TextStyle(
+        Decl.ColorLit(1, 1, 1, 1),
+        Decl.StringLit("default"),
+        Decl.NumLit(font_size or 20),
+        Decl.NumLit(0),
+        Decl.NumLit(1.2),
+        Decl.WrapNone,
+        Decl.TextAlignLeft)
+end
+
+local function make_label(name, text, font_size)
+    return Decl.Node(
+        Decl.Stable(name), no_vis(),
+        Decl.Layout(Decl.Row,
+            Decl.Fit(nil, nil), Decl.Fit(nil, nil),
+            zero_padding(), zero,
+            Decl.AlignLeft, Decl.AlignTop),
+        no_decor(), nil, nil, no_input(), nil,
+        Decl.Text(Decl.TextLeaf(Decl.StringLit(text), text_style(font_size))),
+        List())
+end
+
 local function full_pipeline(decl_comp)
     local b = bind.bind_component(decl_comp)
     local p = plan.plan_component(b)
@@ -464,6 +487,83 @@ do
 
     assert(test() == 0, "test 11 failed at " .. tostring(test()))
     print("  test 11 (runtime fields): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 12: text leaf fit sizing uses intrinsic measure
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "text_fit", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+            nil, nil,
+            List{
+                make_label("lbl", "ABCD", 20),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 800; f.viewport_h = 600
+        [layout_q](&f)
+        -- width = 4 chars * 20 * 0.6 = 48
+        -- height = 20 * 1.2 = 24
+        if f.nodes[1].w ~= 48 then return 1 end
+        if f.nodes[1].h ~= 24 then return 2 end
+        return 0
+    end
+
+    assert(test() == 0, "test 12 failed at " .. tostring(test()))
+    print("  test 12 (text fit sizing): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 13: container fit sizing aggregates child intrinsic sizes
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "row_fit", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+            nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("row"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fit(nil, nil), Decl.Fit(nil, nil),
+                        zero_padding(), Decl.NumLit(10),
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(), nil, nil,
+                    List{
+                        make_label("a", "ABC", 20),
+                        make_label("b", "ABC", 20),
+                    }),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 800; f.viewport_h = 600
+        [layout_q](&f)
+        -- each label: 3 * 20 * 0.6 = 36 wide, 24 high
+        -- row fit width = 36 + 10 + 36 = 82
+        -- row fit height = max(24,24) = 24
+        if f.nodes[1].w ~= 82 then return 1 end
+        if f.nodes[1].h ~= 24 then return 2 end
+        -- second label starts after first + gap
+        if f.nodes[3].x ~= 46 then return 3 end
+        return 0
+    end
+
+    assert(test() == 0, "test 13 failed at " .. tostring(test()))
+    print("  test 13 (container fit aggregation): ok")
 end
 
 ---------------------------------------------------------------------------
