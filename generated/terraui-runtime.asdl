@@ -1,0 +1,244 @@
+module Decl {
+    Component = (string name, Param* params, StateSlot* state, Node root) unique
+
+    Param = (string name, ValueType ty, Expr? default)
+
+    StateSlot = (string name, ValueType ty, Expr? initial)
+
+    ValueType = TBool
+         | TNumber
+         | TString
+         | TColor
+         | TImage
+         | TVec2
+         | TAny
+
+    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Node* children)
+
+    Id = Auto
+         | Stable(string name)
+         | Indexed(string name, Expr index)
+
+    Visibility = (Expr? visible_when, Expr? enabled_when)
+
+    Layout = (Axis axis, Size width, Size height, Padding padding, Expr gap, AlignX align_x, AlignY align_y)
+
+    Axis = Row
+         | Column
+
+    AlignX = AlignLeft
+         | AlignCenterX
+         | AlignRight
+
+    AlignY = AlignTop
+         | AlignCenterY
+         | AlignBottom
+
+    Size = Fit(Expr? min, Expr? max)
+         | Grow(Expr? min, Expr? max)
+         | Fixed(Expr value)
+         | Percent(Expr value)
+
+    Padding = (Expr left, Expr top, Expr right, Expr bottom)
+
+    Decor = (Expr? background, Border? border, CornerRadius? radius, Expr? opacity)
+
+    Border = (Expr left, Expr top, Expr right, Expr bottom, Expr between_children, Expr color)
+
+    CornerRadius = (Expr top_left, Expr top_right, Expr bottom_right, Expr bottom_left)
+
+    Clip = (boolean horizontal, boolean vertical, Expr? child_offset_x, Expr? child_offset_y)
+
+    Floating = (FloatTarget target, AttachPoint element_point, AttachPoint parent_point, Expr offset_x, Expr offset_y, Expr expand_w, Expr expand_h, Expr z_index, PointerCapture pointer_capture)
+
+    FloatTarget = FloatParent
+         | FloatById(Id id)
+
+    AttachPoint = AttachLeftTop
+         | AttachTopCenter
+         | AttachRightTop
+         | AttachLeftCenter
+         | AttachCenter
+         | AttachRightCenter
+         | AttachLeftBottom
+         | AttachBottomCenter
+         | AttachRightBottom
+
+    PointerCapture = Capture
+         | Passthrough
+
+    Input = (boolean hover, boolean press, boolean focus, boolean wheel, string? cursor, string? action)
+
+    Leaf = Text(TextLeaf value)
+         | Image(ImageLeaf value)
+         | Custom(CustomLeaf value)
+
+    TextLeaf = (Expr content, TextStyle style)
+
+    TextStyle = (Expr color, Expr font_id, Expr font_size, Expr letter_spacing, Expr line_height, WrapMode wrap, TextAlign align)
+
+    WrapMode = WrapWords
+         | WrapNewlines
+         | WrapNone
+
+    TextAlign = TextAlignLeft
+         | TextAlignCenter
+         | TextAlignRight
+
+    ImageLeaf = (Expr image_id, Expr tint, ImageFit fit)
+
+    ImageFit = ImageStretch
+         | ImageContain
+         | ImageCover
+
+    CustomLeaf = (string kind, Expr? payload)
+
+    Expr = BoolLit(boolean v)
+         | NumLit(number v)
+         | StringLit(string v)
+         | ColorLit(number r, number g, number b, number a)
+         | Vec2Lit(number x, number y)
+         | ParamRef(string name)
+         | StateRef(string name)
+         | ThemeRef(string name)
+         | EnvRef(string name)
+         | Unary(string op, Expr rhs)
+         | Binary(string op, Expr lhs, Expr rhs)
+         | Select(Expr cond, Expr yes, Expr no)
+         | Call(string fn, Expr* args)
+
+}
+
+module Bound {
+    SpecializationKey = (string renderer, string text_backend, Param* params, StateSlot* state, Node root) unique
+
+    Component = (string name, Param* params, StateSlot* state, SpecializationKey key, Node root)
+
+    Param = (string name, Decl.ValueType ty, number slot)
+
+    StateSlot = (string name, Decl.ValueType ty, number slot, Value? initial)
+
+    Node = (number local_id, ResolvedId stable_id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Value? aspect_ratio, Leaf? leaf, Node* children)
+
+    ResolvedId = (string base, number salt)
+
+    Visibility = (Value? visible_when, Value? enabled_when)
+
+    Layout = (Decl.Axis axis, Size width, Size height, Padding padding, Value gap, Decl.AlignX align_x, Decl.AlignY align_y)
+
+    Size = Fit(Value? min, Value? max)
+         | Grow(Value? min, Value? max)
+         | Fixed(Value value)
+         | Percent(Value value)
+
+    Padding = (Value left, Value top, Value right, Value bottom)
+
+    Decor = (Value? background, Border? border, CornerRadius? radius, Value? opacity)
+
+    Border = (Value left, Value top, Value right, Value bottom, Value between_children, Value color)
+
+    CornerRadius = (Value top_left, Value top_right, Value bottom_right, Value bottom_left)
+
+    Clip = (boolean horizontal, boolean vertical, Value? child_offset_x, Value? child_offset_y)
+
+    Floating = (FloatTarget target, Decl.AttachPoint element_point, Decl.AttachPoint parent_point, Value offset_x, Value offset_y, Value expand_w, Value expand_h, Value z_index, Decl.PointerCapture pointer_capture)
+
+    FloatTarget = FloatParent
+         | FloatByStableId(ResolvedId id)
+
+    Input = (boolean hover, boolean press, boolean focus, boolean wheel, string? cursor, string? action)
+
+    Leaf = Text(TextLeaf value)
+         | Image(ImageLeaf value)
+         | Custom(CustomLeaf value)
+
+    TextLeaf = (Value content, TextStyle style)
+
+    TextStyle = (Value color, Value font_id, Value font_size, Value letter_spacing, Value line_height, Decl.WrapMode wrap, Decl.TextAlign align)
+
+    ImageLeaf = (Value image_id, Value tint, Decl.ImageFit fit)
+
+    CustomLeaf = (string kind, Value? payload)
+
+    Value = ConstBool(boolean v)
+         | ConstNumber(number v)
+         | ConstString(string v)
+         | ConstColor(number r, number g, number b, number a)
+         | ConstVec2(number x, number y)
+         | ParamSlot(number slot)
+         | StateSlotRef(number slot)
+         | EnvSlot(string name)
+         | Unary(string op, Value rhs)
+         | Binary(string op, Value lhs, Value rhs)
+         | Select(Value cond, Value yes, Value no)
+         | Intrinsic(string fn, Value* args)
+
+}
+
+module Plan {
+    Component = (Bound.SpecializationKey key, Node* nodes, Guard* guards, Paint* paints, InputSpec* inputs, ClipSpec* clips, TextSpec* texts, ImageSpec* images, CustomSpec* customs, FloatSpec* floats, number root_index) unique
+
+    Node = (number index, number? parent, number? first_child, number child_count, number subtree_end, Decl.Axis axis, SizeRule width, SizeRule height, Binding padding_left, Binding padding_top, Binding padding_right, Binding padding_bottom, Binding gap, Decl.AlignX align_x, Decl.AlignY align_y, number guard_slot, number paint_slot, number input_slot, number? clip_slot, number? text_slot, number? image_slot, number? custom_slot, number? float_slot, Binding? aspect_ratio)
+
+    SizeRule = Fit(Binding? min, Binding? max)
+         | Grow(Binding? min, Binding? max)
+         | Fixed(Binding value)
+         | Percent(Binding value)
+
+    MeasureMode = MeasureWidth
+         | MeasureHeight
+
+    Guard = (Binding? visible_when, Binding? enabled_when)
+
+    Paint = (Binding? background, Border? border, CornerRadius? radius, Binding? opacity)
+
+    Border = (Binding left, Binding top, Binding right, Binding bottom, Binding between_children, Binding color)
+
+    CornerRadius = (Binding top_left, Binding top_right, Binding bottom_right, Binding bottom_left)
+
+    InputSpec = (boolean hover, boolean press, boolean focus, boolean wheel, string? cursor, string? action)
+
+    ClipSpec = (number node_index, boolean horizontal, boolean vertical, Binding? child_offset_x, Binding? child_offset_y)
+
+    TextSpec = (number node_index, Binding content, Binding color, Binding font_id, Binding font_size, Binding letter_spacing, Binding line_height, Decl.WrapMode wrap, Decl.TextAlign align)
+
+    ImageSpec = (number node_index, Binding image_id, Binding tint, Decl.ImageFit fit)
+
+    CustomSpec = (number node_index, string kind, Binding? payload)
+
+    FloatSpec = (number node_index, number attach_parent_slot, Decl.AttachPoint element_point, Decl.AttachPoint parent_point, Binding offset_x, Binding offset_y, Binding expand_w, Binding expand_h, Binding z_index, Decl.PointerCapture pointer_capture)
+
+    LeafSlots = (number? text_slot, number? image_slot, number? custom_slot)
+
+    Binding = ConstBool(boolean v)
+         | ConstNumber(number v)
+         | ConstString(string v)
+         | ConstColor(number r, number g, number b, number a)
+         | ConstVec2(number x, number y)
+         | Param(number slot)
+         | State(number slot)
+         | Env(string name)
+         | Expr(string op, Binding* args)
+
+}
+
+module Kernel {
+    RectStream = (TerraType cmd_t, TerraQuote emit_fn)
+
+    BorderStream = (TerraType cmd_t, TerraQuote emit_fn)
+
+    TextStream = (TerraType cmd_t, TerraQuote measure_fn, TerraQuote emit_fn)
+
+    ImageStream = (TerraType cmd_t, TerraQuote emit_fn)
+
+    ScissorStream = (TerraType cmd_t, TerraQuote emit_fn)
+
+    CustomStream = (TerraType cmd_t, TerraQuote emit_fn)
+
+    RuntimeTypes = (TerraType params_t, TerraType state_t, TerraType frame_t, TerraType input_t, TerraType node_t, TerraType clip_state_t, TerraType scroll_state_t, TerraType hit_t)
+
+    Kernels = (TerraQuote init_fn, TerraQuote layout_fn, TerraQuote input_fn, TerraQuote hit_test_fn, TerraQuote run_fn)
+
+    Component = (Bound.SpecializationKey key, RuntimeTypes types, RectStream rects, BorderStream borders, TextStream texts, ImageStream images, ScissorStream scissors, CustomStream customs, Kernels kernels) unique
+
+}

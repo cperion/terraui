@@ -20,6 +20,7 @@ This is still an early design-and-infrastructure repository. The first implement
 - `lib/terraui_schema.t` — TerraUI schema written in the DSL
 - `tools/emit_terraui_asdl.t` — emit/check generated raw ASDL
 - `tools/run_tests.sh` — run the current test suite
+- `generated/terraui-runtime.asdl` — checked-in emitted raw ASDL snapshot
 - `tests/` — schema DSL and TerraUI schema tests
 - `docs/design/` — architecture and design set
 - `starter-conv.txt` — original design conversation source material
@@ -45,7 +46,19 @@ make asdl
 make asdl OUT=/tmp/terraui.asdl
 ```
 
-### Check an ASDL file against the current emitted schema
+### Refresh the checked-in ASDL snapshot
+
+```bash
+make snapshot
+```
+
+### Check the emitted schema against the checked-in snapshot
+
+```bash
+make check
+```
+
+### Check an arbitrary ASDL file against the current emitted schema
 
 ```bash
 make check FILE=/tmp/terraui.asdl
@@ -57,6 +70,7 @@ You can still invoke the Terra tools directly if you prefer:
 ./tools/run_tests.sh
 terra tools/emit_terraui_asdl.t
 terra tools/emit_terraui_asdl.t /tmp/terraui.asdl
+terra tools/emit_terraui_asdl.t --check generated/terraui-runtime.asdl
 terra tools/emit_terraui_asdl.t --check /tmp/terraui.asdl
 ```
 
