@@ -567,4 +567,80 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- Test 14: row cross-axis center alignment
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "align_center_y", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Row,
+                Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignCenterY),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                make_node("child", Decl.Column,
+                    Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(20))),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 300; f.viewport_h = 100
+        [layout_q](&f)
+        -- centered on cross axis: (100 - 20) / 2 = 40
+        if f.nodes[1].y ~= 40 then return 1 end
+        return 0
+    end
+
+    assert(test() == 0, "test 14 failed at " .. tostring(test()))
+    print("  test 14 (row center alignment): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 15: aspect ratio derives flexible axis
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "aspect_ratio", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+            nil, nil,
+            List{
+                Decl.Node(
+                    Decl.Stable("child"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(100)),
+                        Decl.Grow(nil, nil),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(),
+                    Decl.NumLit(2.0),
+                    nil,
+                    List()),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 400; f.viewport_h = 300
+        [layout_q](&f)
+        -- ratio 2.0 means height = width / 2 = 50
+        if f.nodes[1].w ~= 100 then return 1 end
+        if f.nodes[1].h ~= 50 then return 2 end
+        return 0
+    end
+
+    assert(test() == 0, "test 15 failed at " .. tostring(test()))
+    print("  test 15 (aspect ratio): ok")
+end
+
+---------------------------------------------------------------------------
 print("compile test passed")

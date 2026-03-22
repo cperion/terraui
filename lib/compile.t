@@ -298,6 +298,24 @@ local function resolve_size(rule, available, intrinsic, ctx)
     error("unknown SizeRule: " .. tostring(rule.kind))
 end
 
+local function apply_aspect_ratio(node, width_q, height_q, ctx)
+    if not node.aspect_ratio then
+        return width_q, height_q
+    end
+
+    local ratio = node.aspect_ratio:compile_number(ctx)
+    local width_drives = (node.width.kind ~= "Grow") and (node.height.kind == "Grow" or node.height.kind == "Fit")
+    local height_drives = (node.height.kind ~= "Grow") and (node.width.kind == "Grow" or node.width.kind == "Fit")
+
+    if width_drives and not height_drives then
+        return width_q, `[width_q] / [ratio]
+    elseif height_drives and not width_drives then
+        return `[height_q] * [ratio], height_q
+    end
+
+    return width_q, height_q
+end
+
 function Plan.SizeRule:compile_axis(ctx, axis_name)
     error("compile_axis not implemented for " .. tostring(self.kind))
 end
@@ -525,19 +543,41 @@ function CompileCtx:emit_children_placement(parent)
         end
         local cross_sz = resolve_size(cross_rule, avail_cross, intrinsic_cross, self)
 
+        local child_w, child_h
         if is_row then
+            child_w, child_h = apply_aspect_ratio(child, `[main_sz], cross_sz, self)
+        else
+            child_w, child_h = apply_aspect_ratio(child, cross_sz, `[main_sz], self)
+        end
+
+        local cross_pos
+        if is_row then
+            if parent.align_y == Decl.AlignCenterY then
+                cross_pos = `[cy] + ([ch] - [child_h]) / 2.0f
+            elseif parent.align_y == Decl.AlignBottom then
+                cross_pos = `[cy] + ([ch] - [child_h])
+            else
+                cross_pos = `[cy]
+            end
             stmts:insert(quote
                 [frame].nodes[ci_node].x = [cur]
-                [frame].nodes[ci_node].y = [cy]
-                [frame].nodes[ci_node].w = [main_sz]
-                [frame].nodes[ci_node].h = [cross_sz]
+                [frame].nodes[ci_node].y = [cross_pos]
+                [frame].nodes[ci_node].w = [child_w]
+                [frame].nodes[ci_node].h = [child_h]
             end)
         else
+            if parent.align_x == Decl.AlignCenterX then
+                cross_pos = `[cx] + ([cw] - [child_w]) / 2.0f
+            elseif parent.align_x == Decl.AlignRight then
+                cross_pos = `[cx] + ([cw] - [child_w])
+            else
+                cross_pos = `[cx]
+            end
             stmts:insert(quote
-                [frame].nodes[ci_node].x = [cx]
+                [frame].nodes[ci_node].x = [cross_pos]
                 [frame].nodes[ci_node].y = [cur]
-                [frame].nodes[ci_node].w = [cross_sz]
-                [frame].nodes[ci_node].h = [main_sz]
+                [frame].nodes[ci_node].w = [child_w]
+                [frame].nodes[ci_node].h = [child_h]
             end)
         end
 
@@ -564,8 +604,9 @@ function Plan.Node:compile_layout(ctx)
 
     if self.parent == nil then
         local i = self.index
-        local w = resolve_size(self.width, `[frame].viewport_w, `[frame].nodes[i].want_w, ctx)
-        local h = resolve_size(self.height, `[frame].viewport_h, `[frame].nodes[i].want_h, ctx)
+        local w0 = resolve_size(self.width, `[frame].viewport_w, `[frame].nodes[i].want_w, ctx)
+        local h0 = resolve_size(self.height, `[frame].viewport_h, `[frame].nodes[i].want_h, ctx)
+        local w, h = apply_aspect_ratio(self, w0, h0, ctx)
         stmts:insert(quote
             [frame].nodes[i].x = 0
             [frame].nodes[i].y = 0
