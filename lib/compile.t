@@ -354,6 +354,17 @@ function CompileCtx:direct_children(parent)
     return children
 end
 
+function CompileCtx:flow_children(parent)
+    local all = self:direct_children(parent)
+    local out = {}
+    for _, child in ipairs(all) do
+        if not child.float_slot then
+            out[#out + 1] = child
+        end
+    end
+    return out
+end
+
 function CompileCtx:emit_node_measure(node)
     local frame = self.frame_sym
     local i = node.index
@@ -374,7 +385,7 @@ function CompileCtx:emit_node_measure(node)
         leaf_h = ts:compile_measure(self, Plan.MeasureHeight)
     end
 
-    local children = self:direct_children(node)
+    local children = self:flow_children(node)
     local child_w = symbol(float, "want_child_w" .. i)
     local child_h = symbol(float, "want_child_h" .. i)
 
@@ -461,7 +472,7 @@ function CompileCtx:emit_children_placement(parent)
         var [ch] = [frame].nodes[pi].content_h
     end)
 
-    local children = self:direct_children(parent)
+    local children = self:flow_children(parent)
 
     local avail_main  = is_row and cw or ch
     local avail_cross = is_row and ch or cw
@@ -620,6 +631,11 @@ function Plan.Node:compile_layout(ctx)
         stmts:insert(ctx:emit_node_content_box(self))
     end
 
+    if self.clip_slot then
+        local clip = ctx.plan.clips[self.clip_slot + 1]
+        stmts:insert(clip:compile_apply(ctx))
+    end
+
     if self.child_count > 0 then
         stmts:insertall(ctx:emit_children_placement(self))
     end
@@ -639,8 +655,65 @@ function Plan.InputSpec:compile_input(ctx, node_index)
     return quote end
 end
 
+local function attach_point_xy(xq, yq, wq, hq, point)
+    if point == Decl.AttachLeftTop then
+        return xq, yq
+    elseif point == Decl.AttachTopCenter then
+        return `[xq] + [wq] / 2.0f, yq
+    elseif point == Decl.AttachRightTop then
+        return `[xq] + [wq], yq
+    elseif point == Decl.AttachLeftCenter then
+        return xq, `[yq] + [hq] / 2.0f
+    elseif point == Decl.AttachCenter then
+        return `[xq] + [wq] / 2.0f, `[yq] + [hq] / 2.0f
+    elseif point == Decl.AttachRightCenter then
+        return `[xq] + [wq], `[yq] + [hq] / 2.0f
+    elseif point == Decl.AttachLeftBottom then
+        return xq, `[yq] + [hq]
+    elseif point == Decl.AttachBottomCenter then
+        return `[xq] + [wq] / 2.0f, `[yq] + [hq]
+    elseif point == Decl.AttachRightBottom then
+        return `[xq] + [wq], `[yq] + [hq]
+    end
+    error("unknown attach point")
+end
+
 function Plan.ClipSpec:compile_apply(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local i = self.node_index
+    local stmts = terralib.newlist()
+
+    if self.horizontal then
+        stmts:insert(quote
+            [frame].nodes[i].clip_x0 = terralib.select([frame].nodes[i].clip_x0 > [frame].nodes[i].content_x,
+                                                       [frame].nodes[i].clip_x0,
+                                                       [frame].nodes[i].content_x)
+            [frame].nodes[i].clip_x1 = terralib.select([frame].nodes[i].clip_x1 < [frame].nodes[i].content_x + [frame].nodes[i].content_w,
+                                                       [frame].nodes[i].clip_x1,
+                                                       [frame].nodes[i].content_x + [frame].nodes[i].content_w)
+        end)
+    end
+    if self.vertical then
+        stmts:insert(quote
+            [frame].nodes[i].clip_y0 = terralib.select([frame].nodes[i].clip_y0 > [frame].nodes[i].content_y,
+                                                       [frame].nodes[i].clip_y0,
+                                                       [frame].nodes[i].content_y)
+            [frame].nodes[i].clip_y1 = terralib.select([frame].nodes[i].clip_y1 < [frame].nodes[i].content_y + [frame].nodes[i].content_h,
+                                                       [frame].nodes[i].clip_y1,
+                                                       [frame].nodes[i].content_y + [frame].nodes[i].content_h)
+        end)
+    end
+
+    if self.child_offset_x then
+        local ox = self.child_offset_x:compile_number(ctx)
+        stmts:insert(quote [frame].nodes[i].content_x = [frame].nodes[i].content_x - [ox] end)
+    end
+    if self.child_offset_y then
+        local oy = self.child_offset_y:compile_number(ctx)
+        stmts:insert(quote [frame].nodes[i].content_y = [frame].nodes[i].content_y - [oy] end)
+    end
+
+    return quote [stmts] end
 end
 
 function Plan.ClipSpec:compile_emit_begin(ctx)
@@ -676,7 +749,43 @@ function Plan.CustomSpec:compile_emit(ctx)
 end
 
 function Plan.FloatSpec:compile_place(ctx)
-    return quote end
+    local frame = ctx.frame_sym
+    local node = ctx.plan.nodes[self.node_index + 1]
+    local target = self.attach_parent_slot
+
+    local target_x = `[frame].nodes[target].x
+    local target_y = `[frame].nodes[target].y
+    local target_w = `[frame].nodes[target].w
+    local target_h = `[frame].nodes[target].h
+
+    local intrinsic_w = `[frame].nodes[self.node_index].want_w
+    local intrinsic_h = `[frame].nodes[self.node_index].want_h
+
+    local base_w = resolve_size(node.width, target_w, intrinsic_w, ctx)
+    local base_h = resolve_size(node.height, target_h, intrinsic_h, ctx)
+    local w0, h0 = apply_aspect_ratio(node, base_w, base_h, ctx)
+
+    local exw = self.expand_w:compile_number(ctx)
+    local exh = self.expand_h:compile_number(ctx)
+    local w = `[w0] + [exw]
+    local h = `[h0] + [exh]
+
+    local tx, ty = attach_point_xy(target_x, target_y, target_w, target_h, self.parent_point)
+    local ex, ey = attach_point_xy(`0.0f, `0.0f, w, h, self.element_point)
+    local ox = self.offset_x:compile_number(ctx)
+    local oy = self.offset_y:compile_number(ctx)
+
+    return quote
+        [frame].nodes[self.node_index].x = [tx] - [ex] + [ox]
+        [frame].nodes[self.node_index].y = [ty] - [ey] + [oy]
+        [frame].nodes[self.node_index].w = [w]
+        [frame].nodes[self.node_index].h = [h]
+        [frame].nodes[self.node_index].clip_x0 = [frame].nodes[target].clip_x0
+        [frame].nodes[self.node_index].clip_y0 = [frame].nodes[target].clip_y0
+        [frame].nodes[self.node_index].clip_x1 = [frame].nodes[target].clip_x1
+        [frame].nodes[self.node_index].clip_y1 = [frame].nodes[target].clip_y1
+        [ctx:emit_node_content_box(node)]
+    end
 end
 
 function CompileCtx:compile_layout_fn()
@@ -699,9 +808,34 @@ function CompileCtx:compile_layout_fn()
         stmts:insert(self:emit_node_measure(nodes[i]))
     end
 
-    -- pass 2: normal-flow layout (preorder)
-    for _, node in ipairs(nodes) do
-        stmts:insert(node:compile_layout(self))
+    -- pass 2: normal-flow layout (preorder), skipping floating subtrees
+    local i = 1
+    while i <= #nodes do
+        local node = nodes[i]
+        if node.float_slot then
+            i = node.subtree_end + 1
+        else
+            stmts:insert(node:compile_layout(self))
+            i = i + 1
+        end
+    end
+
+    -- pass 3: floating placement + subtree layout
+    for _, fs in ipairs(self.plan.floats) do
+        local root = nodes[fs.node_index + 1]
+        stmts:insert(fs:compile_place(self))
+        stmts:insert(root:compile_layout(self))
+
+        local j = root.index + 2
+        while j <= root.subtree_end do
+            local node = nodes[j]
+            if node.float_slot then
+                j = node.subtree_end + 1
+            else
+                stmts:insert(node:compile_layout(self))
+                j = j + 1
+            end
+        end
     end
 
     return terra([frame])

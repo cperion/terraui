@@ -643,4 +643,102 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- Test 16: clip child offsets shift child placement space
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "clip_offsets", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Row,
+                Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(),
+            Decl.Clip(true, false, Decl.NumLit(10), nil),
+            nil, no_input(), nil, nil,
+            List{
+                make_node("child", Decl.Column,
+                    Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20))),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 100; f.viewport_h = 50
+        [layout_q](&f)
+        -- child placement starts from shifted content_x = -10
+        if f.nodes[1].x ~= -10 then return 1 end
+        -- root clip is clamped to its content box horizontally
+        if f.nodes[0].clip_x0 ~= 0 then return 2 end
+        if f.nodes[0].clip_x1 ~= 100 then return 3 end
+        -- child inherits clipped ancestry
+        if f.nodes[1].clip_x0 ~= 0 then return 4 end
+        if f.nodes[1].clip_x1 ~= 100 then return 5 end
+        return 0
+    end
+
+    assert(test() == 0, "test 16 failed at " .. tostring(test()))
+    print("  test 16 (clip child offsets): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 17: floating node is excluded from normal flow and placed by anchor
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "floating_layout", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                make_node("normal", Decl.Row,
+                    Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20))),
+                Decl.Node(
+                    Decl.Stable("float"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(10)), Decl.Fixed(Decl.NumLit(10)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil,
+                    Decl.Floating(
+                        Decl.FloatParent,
+                        Decl.AttachLeftTop,
+                        Decl.AttachRightBottom,
+                        Decl.NumLit(5), Decl.NumLit(7),
+                        zero, zero,
+                        zero,
+                        Decl.Passthrough),
+                    no_input(), nil, nil, List()),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 300; f.viewport_h = 300
+        [layout_q](&f)
+        -- normal child stays in ordinary flow at origin
+        if f.nodes[1].x ~= 0 then return 1 end
+        if f.nodes[1].y ~= 0 then return 2 end
+        -- floating child anchored to root right-bottom plus offsets
+        if f.nodes[2].x ~= 105 then return 3 end
+        if f.nodes[2].y ~= 107 then return 4 end
+        return 0
+    end
+
+    assert(test() == 0, "test 17 failed at " .. tostring(test()))
+    print("  test 17 (floating placement): ok")
+end
+
+---------------------------------------------------------------------------
 print("compile test passed")
