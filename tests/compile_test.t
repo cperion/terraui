@@ -58,6 +58,11 @@ do
     assert(terralib.types.istype(k.types.params_t))
     assert(terralib.types.istype(k.types.state_t))
     assert(terralib.types.istype(k.types.frame_t))
+    assert(terralib.types.istype(k.types.node_t))
+    assert(terralib.types.istype(k.types.input_t))
+    assert(terralib.types.istype(k.types.hit_t))
+    assert(k:frame_type() == k.types.frame_t)
+    assert(terralib.isquote(k:run_quote()))
 
     print("  test 1 (types generated): ok")
 end
@@ -422,6 +427,43 @@ do
 
     assert(test() == 0, "test 10 failed")
     print("  test 10 (expr binding): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 11: expanded frame/node runtime fields are initialized
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(Decl.Component(
+        "runtime_fields", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil))))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 320; f.viewport_h = 200
+        [layout_q](&f)
+
+        if f.action_node ~= -1 then return 1 end
+        if f.hit.hot ~= -1 then return 2 end
+        if f.hit.active ~= -1 then return 3 end
+        if f.hit.focus ~= -1 then return 4 end
+
+        if f.nodes[0].content_w ~= 320 then return 5 end
+        if f.nodes[0].content_h ~= 200 then return 6 end
+        if f.nodes[0].clip_x1 ~= 320 then return 7 end
+        if f.nodes[0].clip_y1 ~= 200 then return 8 end
+        if f.nodes[0].visible ~= true then return 9 end
+        if f.nodes[0].enabled ~= true then return 10 end
+
+        return 0
+    end
+
+    assert(test() == 0, "test 11 failed at " .. tostring(test()))
+    print("  test 11 (runtime fields): ok")
 end
 
 ---------------------------------------------------------------------------
