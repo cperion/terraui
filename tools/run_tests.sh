@@ -13,3 +13,4 @@ terra tests/compile_test.t
 terra tests/dsl_test.t
 terra tests/presenter_test.t
 terra tests/opengl_backend_test.t
+terra tests/direct_c_backend_test.t

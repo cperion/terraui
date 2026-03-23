@@ -1385,6 +1385,12 @@ M.Color      = Color
 M.Vec2       = Vec2
 M.NodeState  = NodeState
 M.NodeRect   = NodeState -- compatibility alias with earlier tests/notes
+M.RectCmd    = RectCmd
+M.BorderCmd  = BorderCmd
+M.TextCmd    = TextCmd
+M.ImageCmd   = ImageCmd
+M.ScissorCmd = ScissorCmd
+M.CustomCmd  = CustomCmd
 
 function M.compile_component(plan_component)
     local ctx = CompileCtx.new(plan_component)
