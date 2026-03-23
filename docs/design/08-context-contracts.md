@@ -72,10 +72,14 @@ But equal compilation inputs must still produce equal outputs.
 ## 4.1 BindCtx responsibilities
 
 - slot allocation for params and state
+- widget-definition registration and lookup
+- widget prop / slot environment management during widget elaboration
 - theme resolution
 - intrinsic resolution
 - deterministic node-id allocation
+- deterministic widget-instance allocation
 - stable path bookkeeping for ids
+- widget-scope bookkeeping for namespaced ids
 
 ## 4.2 BindCtx contract surface
 
@@ -83,15 +87,22 @@ The final design discussion converged on a surface like this:
 
 ```lua
 BindCtx = {
-    param_slot        = function(self, name) -> number end,
-    state_slot        = function(self, name) -> number end,
-    resolve_theme     = function(self, name) -> any end,
-    resolve_intrinsic = function(self, fn, arity) -> string? end,
+    param_slot          = function(self, name) -> number end,
+    state_slot          = function(self, name) -> number end,
+    register_widget     = function(self, def) end,
+    widget_def          = function(self, name) -> Decl.WidgetDef end,
+    resolve_widget_prop = function(self, name) -> Bound.Value end,
+    resolve_slot_children = function(self, name) -> Decl.Child* end,
+    bind_widget_call    = function(self, call) -> Bound.Node end,
+    resolve_theme       = function(self, name) -> any end,
+    resolve_intrinsic   = function(self, fn, arity) -> string? end,
 
-    alloc_node_id     = function(self) -> number end,
-    push_path         = function(self, base, local_id) end,
-    pop_path          = function(self) end,
-    path_string       = function(self) -> string end,
+    alloc_node_id       = function(self) -> number end,
+    alloc_widget_id     = function(self) -> number end,
+    push_path           = function(self, base, local_id) end,
+    pop_path            = function(self) end,
+    path_string         = function(self) -> string end,
+    widget_scope_string = function(self) -> string? end,
 }
 ```
 
@@ -171,10 +182,14 @@ This supports generation of stable auto ids and debug-friendly structural identi
 ## 4.9 BindCtx invariants
 
 1. param/state slot allocation is stable
-2. path bookkeeping is balanced
-3. intrinsic resolution is canonical
-4. theme resolution removes author-time sugar
-5. local node ids are unique per component bind pass
+2. widget definitions are uniquely named within one component bind pass
+3. widget prop/slot environments are stack-balanced during elaboration
+4. path bookkeeping is balanced
+5. intrinsic resolution is canonical
+6. theme resolution removes author-time sugar
+7. local node ids are unique per component bind pass
+8. widget-instance ids are deterministic per component bind pass
+9. widget-local stable ids are namespaced deterministically
 
 ## 5. PlanCtx
 

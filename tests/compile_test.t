@@ -28,8 +28,25 @@ end
 local function zero_padding()
     return Decl.Padding(zero, zero, zero, zero)
 end
+local function child_list(xs)
+    local out = List()
+    for _, x in ipairs(xs or {}) do
+        if Decl.Node:isclassof(x) then
+            out:insert(Decl.NodeChild(x))
+        else
+            out:insert(x)
+        end
+    end
+    return out
+end
+local function component(name, params, state, root, widgets)
+    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+end
+local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
+    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+end
 local function make_node(name, axis, w, h, pad, gap, children)
-    return Decl.Node(
+    return node(
         Decl.Stable(name), no_vis(),
         Decl.Layout(axis, w, h, pad or zero_padding(),
             gap or zero, Decl.AlignLeft, Decl.AlignTop),
@@ -49,7 +66,7 @@ local function text_style(font_size)
 end
 
 local function make_label(name, text, font_size)
-    return Decl.Node(
+    return node(
         Decl.Stable(name), no_vis(),
         Decl.Layout(Decl.Row,
             Decl.Fit(nil, nil), Decl.Fit(nil, nil),
@@ -71,7 +88,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "types_test",
         List{ Decl.Param("x", Decl.TNumber, nil) },
         List{ Decl.StateSlot("y", Decl.TNumber, nil) },
@@ -95,7 +112,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "col_fixed", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -142,7 +159,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "col_gap", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -175,7 +192,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "row_test", List(), List(),
         make_node("root", Decl.Row,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -213,7 +230,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "grow_test", List(), List(),
         make_node("root", Decl.Row,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -255,9 +272,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "pad_test", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -295,7 +312,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "param_test",
         List{ Decl.Param("h", Decl.TNumber, nil) },
         List(),
@@ -329,7 +346,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "pct_test", List(), List(),
         make_node("root", Decl.Row,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -367,7 +384,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "nested", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -419,7 +436,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "expr_test",
         List{ Decl.Param("base", Decl.TNumber, nil) },
         List(),
@@ -457,7 +474,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "runtime_fields", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil))))
@@ -496,7 +513,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "text_fit", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -528,13 +545,13 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "row_fit", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
             nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("row"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fit(nil, nil), Decl.Fit(nil, nil),
@@ -573,9 +590,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "align_center_y", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Row,
                 Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -608,13 +625,13 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "aspect_ratio", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
             nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("child"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(100)),
@@ -649,9 +666,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "clip_offsets", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Row,
                 Decl.Grow(nil, nil), Decl.Grow(nil, nil),
@@ -692,9 +709,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "floating_layout", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
@@ -704,7 +721,7 @@ do
             List{
                 make_node("normal", Decl.Row,
                     Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20))),
-                Decl.Node(
+                node(
                     Decl.Stable("float"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(10)), Decl.Fixed(Decl.NumLit(10)),
@@ -748,9 +765,9 @@ end
 
 do
     local clickable = Decl.Input(true, true, true, false, "hand", "click")
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "hit_test", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
@@ -758,14 +775,14 @@ do
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(), nil, nil, no_input(), nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("a"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(80)), Decl.Fixed(Decl.NumLit(80)),
                         zero_padding(), zero,
                         Decl.AlignLeft, Decl.AlignTop),
                     no_decor(), nil, nil, clickable, nil, nil, List()),
-                Decl.Node(
+                node(
                     Decl.Stable("b"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(80)), Decl.Fixed(Decl.NumLit(80)),
@@ -808,9 +825,9 @@ end
 
 do
     local clickable = Decl.Input(true, true, true, false, "hand", "activate")
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "input_test", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
@@ -818,7 +835,7 @@ do
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(), nil, nil, no_input(), nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("btn"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(50)), Decl.Fixed(Decl.NumLit(30)),
@@ -866,9 +883,9 @@ end
 
 do
     local one = Decl.NumLit(1)
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "paint_rect_border", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
@@ -910,9 +927,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "emit_misc", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(120)), Decl.Fixed(Decl.NumLit(90)),
@@ -923,7 +940,7 @@ do
             nil, no_input(), nil, nil,
             List{
                 make_label("txt", "Hi", 20),
-                Decl.Node(
+                node(
                     Decl.Stable("img"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(30)), Decl.Fixed(Decl.NumLit(20)),
@@ -935,7 +952,7 @@ do
                         Decl.ColorLit(1, 1, 1, 1),
                         Decl.ImageContain)),
                     List()),
-                Decl.Node(
+                node(
                     Decl.Stable("custom"), no_vis(),
                     Decl.Layout(Decl.Row,
                         Decl.Fixed(Decl.NumLit(10)), Decl.Fixed(Decl.NumLit(10)),
@@ -976,11 +993,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "invisible_guard",
         List{ Decl.Param("show", Decl.TBool, nil) },
         List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
@@ -988,7 +1005,7 @@ do
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(), nil, nil, no_input(), nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("child"),
                     Decl.Visibility(Decl.ParamRef("show"), nil),
                     Decl.Layout(Decl.Row,
@@ -1028,11 +1045,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local k = full_pipeline(Decl.Component(
+    local k = full_pipeline(component(
         "disabled_guard",
         List{ Decl.Param("enabled", Decl.TBool, nil) },
         List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(100)),
@@ -1040,7 +1057,7 @@ do
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(), nil, nil, no_input(), nil, nil,
             List{
-                Decl.Node(
+                node(
                     Decl.Stable("child"),
                     Decl.Visibility(nil, Decl.ParamRef("enabled")),
                     Decl.Layout(Decl.Row,

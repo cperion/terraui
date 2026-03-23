@@ -15,6 +15,12 @@ This repository currently contains:
   - `lib/compile.t`
   - `lib/dsl.t`
   - `lib/terraui.t`
+- first-class `Decl`-level widget authoring with bind-time elaboration:
+  - `ui.widget(...)`
+  - `ui.widget_prop(...)`
+  - `ui.widget_slot(...)`
+  - `ui.use(...)`
+  - `ui.slot(...)`
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`

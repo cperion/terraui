@@ -23,6 +23,18 @@ local function is_decl_node(v)
     return type(v) == "table" and Decl.Node:isclassof(v)
 end
 
+local function is_decl_child(v)
+    return type(v) == "table" and Decl.Child:isclassof(v)
+end
+
+local function is_decl_widget_call(v)
+    return type(v) == "table" and Decl.WidgetCall:isclassof(v)
+end
+
+local function is_decl_widget_def(v)
+    return type(v) == "table" and Decl.WidgetDef:isclassof(v)
+end
+
 local function zero()
     return Decl.NumLit(0)
 end
@@ -153,8 +165,12 @@ end
 local function flatten_children(out, child)
     if child == nil then
         return
-    elseif is_decl_node(child) then
+    elseif is_decl_child(child) then
         out:insert(child)
+    elseif is_decl_node(child) then
+        out:insert(Decl.NodeChild(child))
+    elseif is_decl_widget_call(child) then
+        out:insert(Decl.WidgetChild(child))
     elseif type(child) == "table" and child.__terraui_fragment then
         for _, c in ipairs(child.children) do flatten_children(out, c) end
     elseif type(child) == "table" and not child.kind then
@@ -260,6 +276,7 @@ function M.dsl()
     ui.env = function(name) return Decl.EnvRef(name) end
     ui.param_ref = function(name) return Decl.ParamRef(name) end
     ui.state_ref = function(name) return Decl.StateRef(name) end
+    ui.prop_ref = function(name) return Decl.WidgetPropRef(name) end
     ui.call = function(fn, ...)
         local args = List()
         for i = 1, select("#", ...) do args:insert(M.as_expr(select(i, ...))) end
@@ -293,10 +310,67 @@ function M.dsl()
         end
     end
 
+    ui.widget_prop = function(name)
+        return function(spec)
+            spec = spec or {}
+            return Decl.WidgetProp(name, spec.type, spec.default and M.as_expr(spec.default) or nil)
+        end
+    end
+
+    ui.widget_slot = function(name)
+        return Decl.WidgetSlot(name)
+    end
+
     ui.state = function(name)
         return function(spec)
             spec = spec or {}
             return Decl.StateSlot(name, spec.type, spec.initial and M.as_expr(spec.initial) or nil)
+        end
+    end
+
+    ui.widget = function(name)
+        return function(spec)
+            spec = spec or {}
+            local props = List()
+            for _, p in ipairs(spec.props or {}) do props:insert(p) end
+            local slots = List()
+            for _, s in ipairs(spec.slots or {}) do slots:insert(s) end
+            assert(spec.root and is_decl_node(spec.root), "widget.root must be a Decl.Node")
+            return Decl.WidgetDef(name, props, slots, spec.root)
+        end
+    end
+
+    ui.slot = function(name)
+        return Decl.SlotRef(name)
+    end
+
+    ui.use = function(name)
+        return function(props)
+            props = props or {}
+            return function(children)
+                local slot_args = List()
+                local slot_map = props.slots or {}
+                local slot_names = {}
+                for slot_name, _ in pairs(slot_map) do slot_names[#slot_names + 1] = slot_name end
+                table.sort(slot_names)
+                for _, slot_name in ipairs(slot_names) do
+                    slot_args:insert(Decl.SlotArg(slot_name, normalize_children(slot_map[slot_name])))
+                end
+                if children ~= nil then
+                    slot_args:insert(Decl.SlotArg("children", normalize_children(children)))
+                end
+
+                local prop_args = List()
+                local prop_names = {}
+                for k, _ in pairs(props) do
+                    if k ~= "id" and k ~= "slots" then prop_names[#prop_names + 1] = k end
+                end
+                table.sort(prop_names)
+                for _, k in ipairs(prop_names) do
+                    prop_args:insert(Decl.PropArg(k, M.as_expr(props[k])))
+                end
+                return Decl.WidgetCall(props.id and normalize_id(props.id) or nil, name, prop_args, slot_args)
+            end
         end
     end
 
@@ -307,8 +381,10 @@ function M.dsl()
             for _, p in ipairs(spec.params or {}) do params:insert(p) end
             local state = List()
             for _, s in ipairs(spec.state or {}) do state:insert(s) end
+            local widgets = List()
+            for _, w in ipairs(spec.widgets or {}) do widgets:insert(w) end
             assert(spec.root and is_decl_node(spec.root), "component.root must be a Decl.Node")
-            return Decl.Component(name, params, state, spec.root)
+            return Decl.Component(name, params, state, widgets, spec.root)
         end
     end
 

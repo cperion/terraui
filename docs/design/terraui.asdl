@@ -23,6 +23,7 @@ module Decl {
         string name,
         Decl.Param* params,
         Decl.StateSlot* state,
+        Decl.WidgetDef* widgets,
         Decl.Node root
     ) unique
     methods {
@@ -56,6 +57,23 @@ module Decl {
         | TVec2
         | TAny
 
+    WidgetDef = (
+        string name,
+        Decl.WidgetProp* props,
+        Decl.WidgetSlot* slots,
+        Decl.Node root
+    )
+
+    WidgetProp = (
+        string name,
+        Decl.ValueType ty,
+        Decl.Expr? default
+    )
+
+    WidgetSlot = (
+        string name
+    )
+
     Node = (
         Decl.Id id,
         Decl.Visibility visibility,
@@ -66,7 +84,7 @@ module Decl {
         Decl.Input input,
         Decl.Expr? aspect_ratio,
         Decl.Leaf? leaf,
-        Decl.Node* children
+        Decl.Child* children
     )
     methods {
         bind(BindCtx ctx) -> Bound.Node
@@ -76,6 +94,28 @@ module Decl {
         = Auto
         | Stable(string name)
         | Indexed(string name, Decl.Expr index)
+
+    Child
+        = NodeChild(Decl.Node value)
+        | WidgetChild(Decl.WidgetCall value)
+        | SlotRef(string name)
+
+    WidgetCall = (
+        Decl.Id? id,
+        string name,
+        Decl.PropArg* props,
+        Decl.SlotArg* slots
+    )
+
+    PropArg = (
+        string name,
+        Decl.Expr value
+    )
+
+    SlotArg = (
+        string name,
+        Decl.Child* children
+    )
 
     Visibility = (
         Decl.Expr? visible_when,
@@ -266,6 +306,7 @@ module Decl {
         | Vec2Lit(number x, number y)
         | ParamRef(string name)
         | StateRef(string name)
+        | WidgetPropRef(string name)
         | ThemeRef(string name)
         | EnvRef(string name)
         | Unary(string op, Decl.Expr rhs)

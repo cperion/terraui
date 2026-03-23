@@ -33,8 +33,9 @@ do
     assert(#decl.state == 1)
     assert(decl.root.layout.axis == Decl.Column)
     assert(#decl.root.children == 2)
-    assert(decl.root.children[1].leaf.kind == "Text")
-    assert(decl.root.children[2].input.press == true)
+    assert(decl.root.children[1].kind == "NodeChild")
+    assert(decl.root.children[1].value.leaf.kind == "Text")
+    assert(decl.root.children[2].value.input.press == true)
 
     print("  test 1 (basic DSL lowering): ok")
 end
@@ -59,8 +60,8 @@ do
     }
 
     assert(#decl.root.children == 5)
-    assert(decl.root.children[1].leaf.kind == "Text")
-    assert(decl.root.children[5].id.kind == "Indexed")
+    assert(decl.root.children[1].value.leaf.kind == "Text")
+    assert(decl.root.children[5].value.id.kind == "Indexed")
 
     print("  test 2 (child helpers): ok")
 end
@@ -92,16 +93,53 @@ do
         },
     }
 
-    assert(decl.root.children[1].clip ~= nil)
-    assert(decl.root.children[1].clip.vertical == true)
-    assert(decl.root.children[2].floating ~= nil)
-    assert(decl.root.children[2].floating.target == Decl.FloatParent)
+    assert(decl.root.children[1].value.clip ~= nil)
+    assert(decl.root.children[1].value.clip.vertical == true)
+    assert(decl.root.children[2].value.floating ~= nil)
+    assert(decl.root.children[2].value.floating.target == Decl.FloatParent)
 
     print("  test 3 (clip/floating lowering): ok")
 end
 
 ---------------------------------------------------------------------------
--- Test 4: public compile entry works and memoizes
+-- Test 4: widget DSL lowers to WidgetDef / WidgetCall / SlotRef
+---------------------------------------------------------------------------
+
+do
+    local card = ui.widget("Card") {
+        props = {
+            ui.widget_prop("title") { type = ui.types.string },
+        },
+        slots = {
+            ui.widget_slot("children"),
+        },
+        root = ui.column { id = ui.stable("root") } {
+            ui.label { id = ui.stable("title"), text = ui.prop_ref("title") },
+            ui.slot("children"),
+        },
+    }
+
+    local decl = ui.component("widget_dsl") {
+        widgets = { card },
+        root = ui.column { id = ui.stable("root") } {
+            ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
+                ui.label { text = "Body" },
+            },
+        },
+    }
+
+    assert(#decl.widgets == 1)
+    assert(decl.widgets[1].name == "Card")
+    assert(#decl.root.children == 1)
+    assert(decl.root.children[1].kind == "WidgetChild")
+    assert(decl.root.children[1].value.name == "Card")
+    assert(decl.root.children[1].value.id.kind == "Stable")
+
+    print("  test 4 (widget DSL lowering): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 5: public compile entry works and memoizes
 ---------------------------------------------------------------------------
 
 do
@@ -134,7 +172,7 @@ do
     end
     assert(test() == 0)
 
-    print("  test 4 (public compile entry): ok")
+    print("  test 5 (public compile entry): ok")
 end
 
 ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 module Decl {
-    Component = (string name, Param* params, StateSlot* state, Node root) unique
+    Component = (string name, Param* params, StateSlot* state, WidgetDef* widgets, Node root) unique
 
     Param = (string name, ValueType ty, Expr? default)
 
@@ -13,11 +13,27 @@ module Decl {
          | TVec2
          | TAny
 
-    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Node* children)
+    WidgetDef = (string name, WidgetProp* props, WidgetSlot* slots, Node root)
+
+    WidgetProp = (string name, ValueType ty, Expr? default)
+
+    WidgetSlot = (string name)
+
+    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Child* children)
 
     Id = Auto
          | Stable(string name)
          | Indexed(string name, Expr index)
+
+    Child = NodeChild(Node value)
+         | WidgetChild(WidgetCall value)
+         | SlotRef(string name)
+
+    WidgetCall = (Id? id, string name, PropArg* props, SlotArg* slots)
+
+    PropArg = (string name, Expr value)
+
+    SlotArg = (string name, Child* children)
 
     Visibility = (Expr? visible_when, Expr? enabled_when)
 
@@ -100,6 +116,7 @@ module Decl {
          | Vec2Lit(number x, number y)
          | ParamRef(string name)
          | StateRef(string name)
+         | WidgetPropRef(string name)
          | ThemeRef(string name)
          | EnvRef(string name)
          | Unary(string op, Expr rhs)

@@ -30,6 +30,7 @@ local schema TerraUI
             name: string
             params: Param*
             state: StateSlot*
+            widgets: WidgetDef*
             root: Node
         unique
         end
@@ -56,6 +57,23 @@ local schema TerraUI
             TAny
         end
 
+        record WidgetDef
+            name: string
+            props: WidgetProp*
+            slots: WidgetSlot*
+            root: Node
+        end
+
+        record WidgetProp
+            name: string
+            ty: ValueType
+            default: Expr?
+        end
+
+        record WidgetSlot
+            name: string
+        end
+
         record Node
             id: Id
             visibility: Visibility
@@ -66,13 +84,36 @@ local schema TerraUI
             input: Input
             aspect_ratio: Expr?
             leaf: Leaf?
-            children: Node*
+            children: Child*
         end
 
         enum Id
             Auto
             Stable { name: string }
             Indexed { name: string, index: Expr }
+        end
+
+        enum Child
+            NodeChild { value: Node }
+            WidgetChild { value: WidgetCall }
+            SlotRef { name: string }
+        end
+
+        record WidgetCall
+            id: Id?
+            name: string
+            props: PropArg*
+            slots: SlotArg*
+        end
+
+        record PropArg
+            name: string
+            value: Expr
+        end
+
+        record SlotArg
+            name: string
+            children: Child*
         end
 
         record Visibility
@@ -252,6 +293,7 @@ local schema TerraUI
             Vec2Lit { x: number, y: number }
             ParamRef { name: string }
             StateRef { name: string }
+            WidgetPropRef { name: string }
             ThemeRef { name: string }
             EnvRef { name: string }
             Unary { op: string, rhs: Expr }

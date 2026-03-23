@@ -19,14 +19,18 @@ BindCtx.__index = BindCtx
 function BindCtx.new(opts)
     opts = opts or {}
     return setmetatable({
-        _param_slots   = {},
-        _state_slots   = {},
-        _next_param    = 0,
-        _next_state    = 0,
-        _next_node_id  = 0,
-        _path_stack    = {},
-        _renderer      = opts.renderer or "default",
-        _text_backend  = opts.text_backend or "default",
+        _param_slots    = {},
+        _state_slots    = {},
+        _widget_defs    = {},
+        _next_param     = 0,
+        _next_state     = 0,
+        _next_node_id   = 0,
+        _next_widget_id = 0,
+        _path_stack     = {},
+        _widget_frames  = {},
+        _override_ids   = {},
+        _renderer       = opts.renderer or "default",
+        _text_backend   = opts.text_backend or "default",
     }, BindCtx)
 end
 
@@ -64,6 +68,85 @@ function BindCtx:alloc_node_id()
     return id
 end
 
+function BindCtx:alloc_widget_id()
+    local id = self._next_widget_id
+    self._next_widget_id = self._next_widget_id + 1
+    return id
+end
+
+function BindCtx:register_widget(def)
+    if self._widget_defs[def.name] ~= nil then
+        error("duplicate widget name: " .. def.name)
+    end
+    self._widget_defs[def.name] = def
+end
+
+function BindCtx:widget_def(name)
+    local def = self._widget_defs[name]
+    if def == nil then error("unknown widget: " .. name) end
+    return def
+end
+
+function BindCtx:current_widget_frame()
+    return self._widget_frames[#self._widget_frames]
+end
+
+function BindCtx:push_widget_frame(frame)
+    self._widget_frames[#self._widget_frames + 1] = frame
+end
+
+function BindCtx:pop_widget_frame()
+    self._widget_frames[#self._widget_frames] = nil
+end
+
+function BindCtx:push_override_id(id)
+    self._override_ids[#self._override_ids + 1] = id
+end
+
+function BindCtx:take_override_id()
+    local n = #self._override_ids
+    if n == 0 then return nil end
+    local id = self._override_ids[n]
+    self._override_ids[n] = nil
+    return id
+end
+
+function BindCtx:widget_scope_string()
+    local frame = self:current_widget_frame()
+    return frame and frame.scope or nil
+end
+
+function BindCtx:resolve_widget_prop(name)
+    local frame = self:current_widget_frame()
+    if frame == nil then
+        error("WidgetPropRef outside widget body: " .. name)
+    end
+    local expr = frame.props[name]
+    if expr == nil then
+        error("unknown widget prop: " .. name)
+    end
+    if frame._resolving[name] then
+        error("cyclic widget prop expansion: " .. name)
+    end
+    frame._resolving[name] = true
+    local ok, result = pcall(function() return expr:bind(self) end)
+    frame._resolving[name] = nil
+    if not ok then error(result) end
+    return result
+end
+
+function BindCtx:resolve_slot_children(name)
+    local frame = self:current_widget_frame()
+    if frame == nil then
+        error("SlotRef outside widget body: " .. name)
+    end
+    local children = frame.slots[name]
+    if children == nil then
+        error("unknown widget slot: " .. name)
+    end
+    return children
+end
+
 function BindCtx:push_path(segment)
     self._path_stack[#self._path_stack + 1] = segment
 end
@@ -84,21 +167,61 @@ end
 -- Id resolution helper (not a schema-declared method)
 ---------------------------------------------------------------------------
 
-local function resolve_id(decl_id, ctx, local_id)
+local function widget_prefix(ctx)
+    local scope = ctx:widget_scope_string()
+    if scope == nil or scope == "" then return "" end
+    return scope .. "/"
+end
+
+local function resolve_id(decl_id, ctx, local_id, opts)
+    opts = opts or {}
     if decl_id.kind == "Auto" then
         return Bound.ResolvedId(
             ctx:path_string() .. "/__auto_" .. local_id, 0)
     elseif decl_id.kind == "Stable" then
-        return Bound.ResolvedId(decl_id.name, 0)
+        local base = decl_id.name
+        if not opts.suppress_widget_prefix then
+            base = widget_prefix(ctx) .. base
+        end
+        return Bound.ResolvedId(base, 0)
     elseif decl_id.kind == "Indexed" then
         local bound_idx = decl_id.index:bind(ctx)
         local salt = local_id
         if bound_idx.kind == "ConstNumber" then
             salt = bound_idx.v
         end
-        return Bound.ResolvedId(decl_id.name, salt)
+        local base = decl_id.name
+        if not opts.suppress_widget_prefix then
+            base = widget_prefix(ctx) .. base
+        end
+        return Bound.ResolvedId(base, salt)
     else
         error("unknown Decl.Id kind: " .. tostring(decl_id.kind))
+    end
+end
+
+local function widget_scope_from_id(call, ctx)
+    if call.id == nil then
+        local base = "__widget_" .. call.name .. "_" .. ctx:alloc_widget_id()
+        local path = ctx:path_string()
+        if path ~= "" then return path .. "/" .. base end
+        return base
+    end
+
+    if call.id.kind == "Auto" then
+        local base = "__widget_" .. call.name .. "_" .. ctx:alloc_widget_id()
+        local path = ctx:path_string()
+        if path ~= "" then return path .. "/" .. base end
+        return base
+    elseif call.id.kind == "Stable" then
+        return call.id.name
+    elseif call.id.kind == "Indexed" then
+        local bound_idx = call.id.index:bind(ctx)
+        local salt = ctx:alloc_widget_id()
+        if bound_idx.kind == "ConstNumber" then salt = bound_idx.v end
+        return call.id.name .. "/" .. tostring(salt)
+    else
+        error("unknown WidgetCall id kind: " .. tostring(call.id.kind))
     end
 end
 
@@ -136,6 +259,10 @@ end
 
 function Decl.StateRef:bind(ctx)
     return Bound.StateSlotRef(ctx:state_slot(self.name))
+end
+
+function Decl.WidgetPropRef:bind(ctx)
+    return ctx:resolve_widget_prop(self.name)
 end
 
 function Decl.ThemeRef:bind(ctx)
@@ -345,12 +472,114 @@ function Decl.Input:bind(ctx)
 end
 
 ---------------------------------------------------------------------------
+-- Child/widget elaboration helpers
+---------------------------------------------------------------------------
+
+local function bind_children(ctx, decl_children)
+    local out = List()
+    for _, child in ipairs(decl_children) do
+        if child.kind == "NodeChild" then
+            out:insert(child.value:bind(ctx))
+        elseif child.kind == "WidgetChild" then
+            out:insert(ctx:bind_widget_call(child.value))
+        elseif child.kind == "SlotRef" then
+            local slot_children = ctx:resolve_slot_children(child.name)
+            local bound = bind_children(ctx, slot_children)
+            for _, node in ipairs(bound) do out:insert(node) end
+        else
+            error("unknown Decl.Child kind: " .. tostring(child.kind))
+        end
+    end
+    return out
+end
+
+function BindCtx:bind_widget_call(call)
+    local def = self:widget_def(call.name)
+
+    for _, frame in ipairs(self._widget_frames) do
+        if frame.name == call.name then
+            error("recursive widget expansion: " .. call.name)
+        end
+    end
+
+    local prop_defs = {}
+    for _, p in ipairs(def.props) do
+        if prop_defs[p.name] ~= nil then
+            error("duplicate widget prop in def " .. def.name .. ": " .. p.name)
+        end
+        prop_defs[p.name] = p
+    end
+
+    local slot_defs = {}
+    for _, s in ipairs(def.slots) do
+        if slot_defs[s.name] ~= nil then
+            error("duplicate widget slot in def " .. def.name .. ": " .. s.name)
+        end
+        slot_defs[s.name] = true
+    end
+    slot_defs.children = slot_defs.children or false
+
+    local props = {}
+    for _, arg in ipairs(call.props) do
+        if props[arg.name] ~= nil then
+            error("duplicate widget prop arg for " .. call.name .. ": " .. arg.name)
+        end
+        if prop_defs[arg.name] == nil then
+            error("unknown widget prop for " .. call.name .. ": " .. arg.name)
+        end
+        props[arg.name] = arg.value
+    end
+    for name, p in pairs(prop_defs) do
+        if props[name] == nil then
+            if p.default ~= nil then
+                props[name] = p.default
+            else
+                error("missing widget prop for " .. call.name .. ": " .. name)
+            end
+        end
+    end
+
+    local slots = {}
+    local slot_seen = {}
+    for name, _ in pairs(slot_defs) do
+        slots[name] = List()
+    end
+    for _, arg in ipairs(call.slots) do
+        if slots[arg.name] == nil then
+            error("unknown widget slot for " .. call.name .. ": " .. arg.name)
+        end
+        if slot_seen[arg.name] then
+            error("duplicate widget slot arg for " .. call.name .. ": " .. arg.name)
+        end
+        slot_seen[arg.name] = true
+        slots[arg.name] = arg.children
+    end
+
+    if call.id ~= nil then
+        self:push_override_id(call.id)
+    end
+    self:push_widget_frame({
+        name = call.name,
+        scope = widget_scope_from_id(call, self),
+        props = props,
+        slots = slots,
+        _resolving = {},
+    })
+    local bound = def.root:bind(self)
+    self:pop_widget_frame()
+    return bound
+end
+
+---------------------------------------------------------------------------
 -- Node:bind
 ---------------------------------------------------------------------------
 
 function Decl.Node:bind(ctx)
     local local_id = ctx:alloc_node_id()
-    local stable_id = resolve_id(self.id, ctx, local_id)
+    local override_id = ctx:take_override_id()
+    local stable_id = resolve_id(override_id or self.id, ctx, local_id, {
+        suppress_widget_prefix = override_id ~= nil,
+    })
 
     ctx:push_path(stable_id.base)
 
@@ -363,11 +592,7 @@ function Decl.Node:bind(ctx)
     local aspect_ratio = self.aspect_ratio
                          and self.aspect_ratio:bind(ctx) or nil
     local leaf        = self.leaf and self.leaf:bind(ctx) or nil
-
-    local children = List()
-    for _, child in ipairs(self.children) do
-        children:insert(child:bind(ctx))
-    end
+    local children    = bind_children(ctx, self.children)
 
     ctx:pop_path()
 
@@ -398,6 +623,7 @@ function Decl.Component:bind(ctx)
     -- Register slots before binding anything
     for _, p in ipairs(self.params) do ctx:register_param(p.name) end
     for _, s in ipairs(self.state) do ctx:register_state(s.name) end
+    for _, w in ipairs(self.widgets) do ctx:register_widget(w) end
 
     local bound_params = List()
     for _, p in ipairs(self.params) do

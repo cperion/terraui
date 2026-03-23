@@ -23,6 +23,8 @@ Important clarification:
 
 - the DSL is real and implemented
 - child helpers such as `each`, `when`, `maybe`, and `fragment` operate at **capture time in Lua**, not as runtime dynamic node replication inside the kernel
+- first-class widget definitions and widget calls now exist at the `Decl` layer
+- widgets are **fully elaborated during bind**, so `Bound`, `Plan`, and `Kernel` stay widget-free and canonical
 - the current public compile path is:
 
 ```text
@@ -94,10 +96,11 @@ Semantic rule:
 
 ```mermaid
 flowchart LR
-    A[ui.* DSL] --> B[Decl.Component]
-    B --> C[Bound.Component]
-    C --> D[Plan.Component]
-    D --> E[Kernel.Component]
+    A[ui.* DSL] --> B[Decl.Component + Decl.WidgetDef + Decl.WidgetCall]
+    B --> C[bind elaborates widgets]
+    C --> D[Bound.Component]
+    D --> E[Plan.Component]
+    E --> F[Kernel.Component]
 ```
 
 ## 5. Public API layers
@@ -108,6 +111,11 @@ Implemented now:
 - `component`
 - `param`
 - `state`
+- `widget`
+- `widget_prop`
+- `widget_slot`
+- `use`
+- `slot`
 - `row`
 - `column`
 - `stack` (currently alias of `column`)
@@ -137,6 +145,7 @@ Implemented now:
 - `env`
 - `param_ref`
 - `state_ref`
+- `prop_ref`
 - `call`
 - `select`
 - `num`
@@ -239,6 +248,7 @@ Canonical shape:
 ui.component("name") {
     params = { ... },
     state = { ... },
+    widgets = { ... },
     root = ...,
 }
 ```
@@ -249,11 +259,12 @@ ui.component("name") {
 ### Optional keys
 - `params`
 - `state`
+- `widgets`
 
 ### Lowering
 Produces `Decl.Component`.
 
-## 8. Param and state declarations
+## 8. Param, state, and widget declarations
 
 ### Param declaration
 ```lua
@@ -279,6 +290,35 @@ ui.state_ref("scroll_y")
 Lower to:
 - `Decl.ParamRef(name)`
 - `Decl.StateRef(name)`
+
+### Widget declarations and calls
+```lua
+local Card = ui.widget("Card") {
+    props = {
+        ui.widget_prop("title") { type = ui.types.string },
+    },
+    slots = {
+        ui.widget_slot("children"),
+    },
+    root = ui.column { id = ui.stable("root") } {
+        ui.label { id = ui.stable("title"), text = ui.prop_ref("title") },
+        ui.slot("children"),
+    },
+}
+
+ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
+    ui.label { text = "Body" },
+}
+```
+
+Lowering notes:
+- `ui.widget(...)` returns `Decl.WidgetDef`
+- `ui.widget_prop(...)` returns `Decl.WidgetProp`
+- `ui.widget_slot(...)` returns `Decl.WidgetSlot`
+- `ui.use(...)` returns `Decl.WidgetCall`
+- `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
+- `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
+- widget calls are elaborated away during bind
 
 ## 9. Structural combinators
 
@@ -306,6 +346,8 @@ These return `Decl.Node` values with normalized child lists.
 
 A container child sequence may contain:
 - a `Decl.Node`
+- a `Decl.WidgetCall`
+- a slot placeholder via `ui.slot(...)` when authoring a widget body
 - `nil`
 - `fragment`
 - nested Lua arrays of valid child entries
@@ -333,18 +375,23 @@ Current status:
 - implemented as an alias of `column`
 - not yet a distinct layout mode
 
-## 12. Widget sugar policy
+## 12. Widget policy
 
-Widgets remain sugar over ordinary node construction.
+TerraUI now has two widget layers:
 
-Examples:
-- `label { ... }` -> node + text leaf
-- `button { ... }` -> interactive node + text leaf + defaults
-- `image_view { ... }` -> node + image leaf
-- `scroll_region { ... } { ... }` -> clipped container node
-- `tooltip { ... } { ... }` -> floating container node when target props are present
+1. built-in DSL combinators such as `label`, `button`, `image_view`, `scroll_region`, and `tooltip`
+2. user-authored first-class `Decl` widgets via `ui.widget(...)` and `ui.use(...)`
 
-No new runtime widget kinds are introduced by the public syntax.
+Important implementation rule:
+
+> widgets are authoring-time constructs only. They are elaborated away during bind.
+
+So:
+- no widget nodes survive into `Bound`
+- no widget side tables are added to `Plan`
+- no widget runtime unions are added to `Kernel`
+
+That preserves the canonical compiler spine while still giving widget authors typed props and named slots.
 
 ## 13. Identity policy
 
@@ -360,10 +407,15 @@ Raw string ids also work in the current implementation and lower to stable ids.
 ## 14. Error behavior
 
 The current DSL fails early on:
-- missing required props for several widgets (`label.text`, `button.text`, `image_view.image`, `custom.kind`)
+- missing required props for several built-in widgets (`label.text`, `button.text`, `image_view.image`, `custom.kind`)
 - malformed component root
 - invalid child entries
 - invalid ids / size / padding inputs
+- unknown widget names during bind
+- duplicate widget names / prop names / slot names during bind
+- missing required widget props during bind
+- unknown or duplicate widget slot arguments during bind
+- `ui.slot(...)` / `Decl.SlotRef(...)` used outside widget bodies during bind
 
 Further strict-key validation is still future work.
 
@@ -399,4 +451,4 @@ Current implementation memoizes by a deterministic string derived from `Plan.Com
 
 The shipped v1 authoring surface is now:
 
-> a capture-time declarative DSL where leaves use one props record, containers use props record plus child-list record, and the result lowers directly into `Decl.*`.
+> a capture-time declarative DSL where leaves use one props record, containers use props record plus child-list record, first-class widgets live in `Decl`, and bind elaborates widget calls back into canonical nodes before planning/compilation.

@@ -45,16 +45,36 @@ local function text_style()
         Decl.WrapNone, Decl.TextAlignLeft)
 end
 
+local function child_list(xs)
+    local out = List()
+    for _, x in ipairs(xs or {}) do
+        if Decl.Node:isclassof(x) then
+            out:insert(Decl.NodeChild(x))
+        else
+            out:insert(x)
+        end
+    end
+    return out
+end
+
+local function component(name, params, state, root, widgets)
+    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+end
+
+local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
+    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+end
+
 local function make_label(name, text)
-    return Decl.Node(
+    return node(
         Decl.Stable(name), no_vis(), fit_layout(), no_decor(),
         nil, nil, no_input(), nil,
         Decl.Text(Decl.TextLeaf(Decl.StringLit(text), text_style())),
-        List())
+        child_list())
 end
 
 local function make_box(name, children)
-    return Decl.Node(
+    return node(
         Decl.Stable(name), no_vis(),
         Decl.Layout(Decl.Column, Decl.Grow(nil, nil), Decl.Grow(nil, nil),
             zero_padding(), Decl.NumLit(8), Decl.AlignLeft, Decl.AlignTop),
@@ -71,7 +91,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "simple", List(), List(),
         make_box("root", List{
             make_label("a", "A"),
@@ -117,7 +137,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "sides", List(), List(),
         make_box("root", List{
             make_label("a", "A"),
@@ -161,11 +181,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "bindings",
         List{ Decl.Param("x", Decl.TNumber, nil) },
         List{ Decl.StateSlot("y", Decl.TNumber, nil) },
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(
                 Decl.Column,
@@ -206,7 +226,7 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "textspec", List(), List(),
         make_label("lbl", "Hello"))
 
@@ -230,9 +250,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "cliptest", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(), fit_layout(), no_decor(),
             Decl.Clip(true, false, Decl.NumLit(10), nil),
             nil, no_input(), nil, nil, List()))
@@ -260,9 +280,9 @@ end
 do
     local one = Decl.NumLit(1)
     local four = Decl.NumLit(4)
-    local comp = Decl.Component(
+    local comp = component(
         "decortest", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(), fit_layout(),
             Decl.Decor(
                 Decl.ColorLit(0.1, 0.1, 0.1, 1),
@@ -292,10 +312,10 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "floattest", List(), List(),
         make_box("root", List{
-            Decl.Node(
+            node(
                 Decl.Stable("tooltip"), no_vis(), fit_layout(), no_decor(),
                 nil,
                 Decl.Floating(
@@ -332,7 +352,7 @@ do
     --     a1(2)
     --     a2(3)
     --   b(4)
-    local comp = Decl.Component(
+    local comp = component(
         "deep", List(), List(),
         make_box("root", List{
             make_box("a", List{
@@ -370,9 +390,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "imgtest", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("img"), no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil,
             Decl.Image(Decl.ImageLeaf(
@@ -398,9 +418,9 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "artest", List(), List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(),
             Decl.NumLit(1.777),
@@ -419,11 +439,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "guardstest",
         List{ Decl.Param("show", Decl.TBool, nil) },
         List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"),
             Decl.Visibility(Decl.ParamRef("show"), nil),
             fit_layout(), no_decor(),
@@ -445,11 +465,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "exprtest",
         List{ Decl.Param("x", Decl.TNumber, nil) },
         List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(
                 Decl.Row,

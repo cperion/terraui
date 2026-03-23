@@ -37,6 +37,7 @@ local layout = Decl.Layout(Decl.Column, Decl.Grow(nil, nil), Decl.Grow(nil, nil)
 local node = Decl.Node(Decl.Stable("root"), visibility, layout, decor, nil, nil, input, nil, nil, terralib.newlist())
 assert(Decl.Node:isclassof(node))
 assert(Decl.Id:isclassof(node.id))
+assert(Decl.Child:isclassof(Decl.NodeChild(node)))
 
 local resolved_id = Bound.ResolvedId("root", 0)
 assert(Bound.ResolvedId:isclassof(resolved_id))

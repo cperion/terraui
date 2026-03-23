@@ -52,13 +52,33 @@ local function text_style()
         Decl.TextAlignLeft)
 end
 
+local function child_list(xs)
+    local out = List()
+    for _, x in ipairs(xs or {}) do
+        if Decl.Node:isclassof(x) then
+            out:insert(Decl.NodeChild(x))
+        else
+            out:insert(x)
+        end
+    end
+    return out
+end
+
+local function component(name, params, state, root, widgets)
+    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+end
+
+local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
+    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+end
+
 local function make_label(name, text)
-    return Decl.Node(
+    return node(
         Decl.Stable(name),
         no_vis(), fit_layout(), no_decor(),
         nil, nil, no_input(), nil,
         Decl.Text(Decl.TextLeaf(Decl.StringLit(text), text_style())),
-        List())
+        child_list())
 end
 
 ---------------------------------------------------------------------------
@@ -66,11 +86,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "test_comp",
         List{ Decl.Param("title", Decl.TString, Decl.StringLit("hello")) },
         List{ Decl.StateSlot("count", Decl.TNumber, Decl.NumLit(0)) },
-        Decl.Node(
+        node(
             Decl.Stable("root"),
             no_vis(),
             Decl.Layout(
@@ -312,11 +332,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "indexed_test",
         List(),
         List(),
-        Decl.Node(
+        node(
             Decl.Indexed("item", Decl.NumLit(42)),
             no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil, List()))
@@ -333,11 +353,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "auto_test",
         List(),
         List(),
-        Decl.Node(
+        node(
             Decl.Auto,
             no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil, List()))
@@ -406,12 +426,12 @@ end
 
 do
     local ok, err = pcall(function()
-        bind.bind_component(Decl.Component(
+        bind.bind_component(component(
             "dup_test",
             List{ Decl.Param("x", Decl.TNumber, nil),
                   Decl.Param("x", Decl.TNumber, nil) },
             List(),
-            Decl.Node(Decl.Auto, no_vis(), fit_layout(), no_decor(),
+            node(Decl.Auto, no_vis(), fit_layout(), no_decor(),
                 nil, nil, no_input(), nil, nil, List())))
     end)
     assert(not ok)
@@ -425,13 +445,13 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "multi_param",
         List{ Decl.Param("a", Decl.TNumber, nil),
               Decl.Param("b", Decl.TString, nil),
               Decl.Param("c", Decl.TBool, nil) },
         List(),
-        Decl.Node(Decl.Auto, no_vis(), fit_layout(), no_decor(),
+        node(Decl.Auto, no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil, List()))
 
     local bound = bind.bind_component(comp)
@@ -447,11 +467,11 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local comp = Decl.Component(
+    local comp = component(
         "vis_test",
         List{ Decl.Param("show", Decl.TBool, nil) },
         List(),
-        Decl.Node(
+        node(
             Decl.Stable("root"),
             Decl.Visibility(
                 Decl.ParamRef("show"),
@@ -466,6 +486,61 @@ do
     assert(bound.root.visibility.enabled_when == nil)
 
     print("  test 14 (visibility bind): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 15: widget calls elaborate during bind with scoped ids
+---------------------------------------------------------------------------
+
+do
+    local card = Decl.WidgetDef(
+        "Card",
+        List{ Decl.WidgetProp("title", Decl.TString, nil) },
+        List{ Decl.WidgetSlot("children") },
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil, nil,
+            child_list {
+                node(
+                    Decl.Stable("title"),
+                    no_vis(), fit_layout(), no_decor(),
+                    nil, nil, no_input(), nil,
+                    Decl.Text(Decl.TextLeaf(Decl.WidgetPropRef("title"), text_style())),
+                    List()),
+                Decl.SlotRef("children"),
+            }))
+
+    local comp = component(
+        "widget_bind",
+        List(),
+        List(),
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil, nil,
+            child_list {
+                Decl.WidgetChild(Decl.WidgetCall(
+                    Decl.Stable("card1"),
+                    "Card",
+                    List{ Decl.PropArg("title", Decl.StringLit("Inspector")) },
+                    List{ Decl.SlotArg("children", child_list { make_label("body", "Hello") }) }))
+            }),
+        List{ card })
+
+    local bound = bind.bind_component(comp)
+    assert(#bound.root.children == 1)
+    assert(bound.root.children[1].stable_id.base == "card1")
+    assert(#bound.root.children[1].children == 2)
+    assert(bound.root.children[1].children[1].stable_id.base == "card1/title")
+    assert(bound.root.children[1].children[2].stable_id.base == "card1/body")
+
+    local title_leaf = bound.root.children[1].children[1].leaf
+    assert(title_leaf.kind == "Text")
+    assert(title_leaf.value.content.kind == "ConstString")
+    assert(title_leaf.value.content.v == "Inspector")
+
+    print("  test 15 (widget bind elaboration): ok")
 end
 
 ---------------------------------------------------------------------------

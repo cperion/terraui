@@ -63,6 +63,11 @@ The returned table currently exposes:
 ui.component
 ui.param
 ui.state
+ui.widget
+ui.widget_prop
+ui.widget_slot
+ui.use
+ui.slot
 
 ui.row
 ui.column
@@ -113,6 +118,7 @@ ui.theme
 ui.env
 ui.param_ref
 ui.state_ref
+ui.prop_ref
 ```
 
 ## 3.4 Namespaces
@@ -228,6 +234,7 @@ ui.float.by_id(id)
 ui.component("name") {
     params = { ... },
     state = { ... },
+    widgets = { ... },
     root = ...,
 }
 ```
@@ -238,6 +245,7 @@ ui.component("name") {
 ### Optional fields
 - `params`
 - `state`
+- `widgets`
 
 ### Lowering
 Returns `Decl.Component`.
@@ -273,6 +281,80 @@ ui.state("scroll_y") { type = ui.types.number, initial = 0 }
 
 ### Lowering
 Returns `Decl.StateSlot`.
+
+## 5.4 `ui.widget(name) { spec }`
+
+### Form
+```lua
+ui.widget("Card") {
+    props = { ... },
+    slots = { ... },
+    root = ...,
+}
+```
+
+### Required fields
+- `root`
+
+### Optional fields
+- `props`
+- `slots`
+
+### Lowering
+Returns `Decl.WidgetDef`.
+
+## 5.5 `ui.widget_prop(name) { ... }`
+
+### Form
+```lua
+ui.widget_prop("title") { type = ui.types.string, default = "Inspector" }
+```
+
+### Required fields
+- `type`
+
+### Optional fields
+- `default`
+
+### Lowering
+Returns `Decl.WidgetProp`.
+
+## 5.6 `ui.widget_slot(name)`
+
+### Form
+```lua
+ui.widget_slot("children")
+```
+
+### Lowering
+Returns `Decl.WidgetSlot`.
+
+## 5.7 `ui.use(name) { props } { children }`
+
+### Form
+```lua
+ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
+    ui.label { text = "Body" },
+}
+```
+
+### Notes
+- optional named slot arguments can be passed through `props.slots`
+- the second brace lowers to the conventional `children` slot
+- `props.id` is an optional widget-instance id override used during bind elaboration
+
+### Lowering
+Returns `Decl.WidgetCall`.
+
+## 5.8 `ui.slot(name)`
+
+### Form
+```lua
+ui.slot("children")
+```
+
+### Lowering
+Returns `Decl.SlotRef(name)`.
 
 ## 6. Leaf constructors
 
@@ -579,6 +661,7 @@ ui.theme(name)
 ui.env(name)
 ui.param_ref(name)
 ui.state_ref(name)
+ui.prop_ref(name)
 ```
 
 ## 11. Public entrypoint helpers

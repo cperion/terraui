@@ -174,7 +174,22 @@ Validator rule:
 
 3. A node with `floating != nil` should still be a normal node in the tree; floating changes placement, not ownership.
 
-## 5.3 Layout rules
+## 5.3 Widget rules
+
+1. Widget names must be unique inside one `Decl.Component`.
+2. Widget prop names must be unique inside one `Decl.WidgetDef`.
+3. Widget slot names must be unique inside one `Decl.WidgetDef`.
+4. `WidgetCall(name, ...)` must refer to an existing widget definition.
+5. Unknown widget props are illegal.
+6. Duplicate widget prop arguments are illegal.
+7. Missing required widget props are illegal.
+8. Unknown widget slots are illegal.
+9. Duplicate widget slot arguments are illegal.
+10. `SlotRef(name)` is only valid while elaborating a widget body.
+11. `WidgetPropRef(name)` is only valid while binding a widget body.
+12. Direct or mutual recursive widget expansion is illegal in v1.
+
+## 5.4 Layout rules
 
 1. Constant `Percent(value)` must satisfy `0 <= value <= 1`.
 2. Constant padding values should be `>= 0` unless negative layout is intentionally enabled later.
@@ -182,47 +197,48 @@ Validator rule:
 4. Constant aspect ratio must be `> 0`.
 5. `Fit(min,max)` and `Grow(min,max)` must satisfy `min <= max` when both are constant.
 
-## 5.4 Decor rules
+## 5.5 Decor rules
 
 1. Constant opacity must be in `[0,1]`.
 2. Constant corner radii should be `>= 0`.
 3. Constant border thickness values should be `>= 0`.
 
-## 5.5 Clip rules
+## 5.6 Clip rules
 
 1. `Clip(horizontal=false, vertical=false, ...)` is meaningless and should be rejected or warned.
 2. Constant child offsets are allowed, but their semantics are clip/scroll offsets, not layout origin changes.
 
-## 5.6 Floating rules
+## 5.7 Floating rules
 
 1. `FloatById` targets must resolve after binding.
 2. A floating node attached to `FloatParent` requires a real parent; floating root nodes to parent is invalid.
 3. Constant z-index values should be finite.
 
-## 5.7 Text rules
+## 5.8 Text rules
 
 1. Constant `font_size` should be `> 0`.
 2. Constant `line_height` should be `> 0`.
 3. Constant `letter_spacing` may be negative only if the text backend explicitly allows it.
 4. `content` must bind to a string-typed value at type-check time.
 
-## 5.8 Image rules
+## 5.9 Image rules
 
 1. `image_id` must bind to an image-compatible value.
 2. `fit` must be one of the declared enum values only.
 
-## 5.9 Custom leaf rules
+## 5.10 Custom leaf rules
 
 1. `kind` must be non-empty.
 2. Payload typing rules are backend/product policy and should be checked separately.
 
-## 5.10 Expression rules
+## 5.11 Expression rules
 
 1. `ParamRef` must refer to an existing parameter.
 2. `StateRef` must refer to an existing state slot.
-3. `ThemeRef` must be fully resolved or converted into an explicit environment/bound value during binding.
-4. `EnvRef` names must belong to the allowed environment surface.
-5. `Call(fn, args)` must resolve to a known intrinsic during binding unless user-defined intrinsics are explicitly supported.
+3. `WidgetPropRef` must refer to an existing widget prop in the current widget elaboration frame.
+4. `ThemeRef` must be fully resolved or converted into an explicit environment/bound value during binding.
+5. `EnvRef` names must belong to the allowed environment surface.
+6. `Call(fn, args)` must resolve to a known intrinsic during binding unless user-defined intrinsics are explicitly supported.
 
 ## 6. Bound-level validation rules
 

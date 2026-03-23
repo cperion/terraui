@@ -150,6 +150,7 @@ Bind the full authored component into a canonical `Bound.Component`.
 - component name
 - param declarations
 - state declarations
+- widget definitions
 - root node
 - `BindCtx`
 
@@ -157,7 +158,9 @@ Bind the full authored component into a canonical `Bound.Component`.
 
 - bind params in stable declaration order
 - bind state in stable declaration order
+- register widget definitions in stable declaration order
 - bind the root node
+- elaborate widget calls away during binding
 - construct `Bound.SpecializationKey`
 - return a fully resolved `Bound.Component`
 
@@ -217,7 +220,11 @@ Convert one authored node into one canonical bound node.
 - allocate deterministic local id
 - resolve stable id
 - bind visibility, layout, decor, clip, floating, input, aspect ratio, leaf, children
-- preserve child order exactly
+- elaborate `Decl.Child` entries:
+  - `NodeChild` binds directly
+  - `WidgetChild` resolves the widget definition and elaborates it away
+  - `SlotRef` splices the current widget slot children
+- preserve child order exactly after elaboration
 
 ### Must guarantee
 

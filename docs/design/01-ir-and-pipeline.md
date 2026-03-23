@@ -59,7 +59,10 @@ flowchart LR
 - `Decl.Component`
 - `Decl.Param`
 - `Decl.StateSlot`
+- `Decl.WidgetDef`
+- `Decl.WidgetCall`
 - `Decl.Node`
+- `Decl.Child`
 - `Decl.Layout`
 - `Decl.Decor`
 - `Decl.Clip`
@@ -108,11 +111,13 @@ This models clipping and scrolling as a structural feature of the node.
 
 - map params to slot indices
 - map state to slot indices
+- register widget definitions
+- elaborate widget calls and slot placeholders away
 - resolve theme refs and env refs
 - resolve intrinsic function names
 - normalize ids into stable ids
 - narrow expressions to `Bound.Value`
-- preserve tree shape while removing ambiguity
+- preserve canonical tree shape while removing authoring-only ambiguity
 
 ### 5.2 Main value forms
 
