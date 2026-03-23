@@ -34,6 +34,7 @@ local C = terralib.includecstring [[
 local ui = terraui.dsl()
 
 local function rgba(r,g,b,a) return ui.rgba(r,g,b,a) end
+
 local function panel(props)
     props = props or {}
     props.background = props.background or rgba(0.12, 0.13, 0.15, 1.0)
@@ -42,18 +43,20 @@ local function panel(props)
     props.gap = props.gap or 8
     return props
 end
-local function button(text, action)
-    return ui.button {
-        text = text,
-        action = action,
-        padding = { left = 10, top = 7, right = 10, bottom = 7 },
-        background = rgba(0.23, 0.38, 0.69, 1),
-        border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.42, 0.58, 0.86, 1) },
-        radius = ui.radius(4),
-        text_color = rgba(1, 1, 1, 1),
-        font_size = 15,
-    }
+
+local function button(text, action, props)
+    props = props or {}
+    props.text = text
+    props.action = action
+    props.padding = props.padding or { left = 12, top = 8, right = 12, bottom = 8 }
+    props.background = props.background or rgba(0.22, 0.37, 0.66, 1)
+    props.border = props.border or ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.42, 0.58, 0.86, 1) }
+    props.radius = props.radius or ui.radius(5)
+    props.text_color = props.text_color or rgba(1, 1, 1, 1)
+    props.font_size = props.font_size or 15
+    return ui.button(props)
 end
+
 local function label(text, props)
     props = props or {}
     props.text = text
@@ -62,27 +65,94 @@ local function label(text, props)
     return ui.label(props)
 end
 
+local function info_row(lhs, rhs)
+    return ui.row {
+        width = ui.grow(),
+        height = ui.fit(),
+        gap = 8,
+    } {
+        label(lhs, { font_size = 14, text_color = rgba(0.70, 0.74, 0.80, 1) }),
+        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+        label(rhs, { font_size = 14, text_color = rgba(0.94, 0.95, 0.97, 1) }),
+    }
+end
+
+local function progress_meter(title, width_param)
+    return ui.column {
+        width = ui.fit(),
+        height = ui.fit(),
+        gap = 4,
+    } {
+        label(title, { font_size = 13, text_color = rgba(0.70, 0.74, 0.80, 1) }),
+        ui.column {
+            width = ui.fixed(220),
+            height = ui.fixed(14),
+            background = rgba(0.14, 0.16, 0.20, 1),
+            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.26, 0.28, 0.33, 1) },
+        } {
+            ui.spacer {
+                width = ui.fixed(ui.param_ref(width_param)),
+                height = ui.fixed(14),
+                background = ui.param_ref("accent"),
+            },
+        },
+    }
+end
+
+local params = {
+    ui.param("selected_tool")    { type = ui.types.string, default = "Inspect" },
+    ui.param("selected_asset")   { type = ui.types.string, default = "Terrain" },
+    ui.param("status_primary")   { type = ui.types.string, default = "Ready" },
+    ui.param("status_secondary") { type = ui.types.string, default = "Static-tree kernel online" },
+    ui.param("hint_text")        { type = ui.types.string, default = "Preview overlay: safe area + focal guides" },
+    ui.param("preview_image")    { type = ui.types.image,  default = "terrain" },
+    ui.param("preview_title")    { type = ui.types.string, default = "Terrain composite" },
+    ui.param("detail_a")         { type = ui.types.string, default = "Asset type: Tile set" },
+    ui.param("detail_b")         { type = ui.types.string, default = "Build channel: Preview" },
+    ui.param("footer_text")      { type = ui.types.string, default = "Cursor idle" },
+    ui.param("progress_a")       { type = ui.types.number, default = 140 },
+    ui.param("progress_b")       { type = ui.types.number, default = 96 },
+    ui.param("accent")           { type = ui.types.color,  default = rgba(0.42, 0.70, 0.32, 1) },
+}
+
+local assets_children = {
+    label("Assets", { font_size = 21 }),
+    label("Choose a surface to drive the preview + inspector.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+    button("Terrain",   "asset:terrain"),
+    button("Water",     "asset:water"),
+    button("Roads",     "asset:roads"),
+    button("Blueprint", "asset:blueprint"),
+    button("Heatmap",   "asset:heatmap"),
+    ui.spacer { height = ui.fixed(12), width = ui.fixed(0) },
+    label("The list is clipped and scroll-offset in the kernel.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+}
+
 local decl = ui.component("sdl_gl_demo") {
+    params = params,
     root = ui.column {
         id = ui.stable("root"),
         width = ui.grow(),
         height = ui.grow(),
-        background = rgba(0.08, 0.09, 0.11, 1),
+        background = rgba(0.07, 0.08, 0.10, 1),
     } {
         ui.row {
             id = ui.stable("toolbar"),
-            height = ui.fixed(46),
-            padding = { left = 12, top = 8, right = 12, bottom = 8 },
+            height = ui.fixed(52),
+            padding = { left = 14, top = 8, right = 14, bottom = 8 },
             gap = 8,
             align_y = ui.align_y.center,
             background = rgba(0.10, 0.11, 0.14, 1),
             border = ui.border { bottom = 1, color = rgba(0.22, 0.24, 0.28, 1) },
         } {
-            button("Inspect", "inspect"),
-            button("Apply", "apply"),
-            button("Export", "export"),
+            button("Inspect", "tool:inspect"),
+            button("Paint",   "tool:paint",   { background = rgba(0.54, 0.28, 0.18, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.78, 0.48, 0.32, 1) } }),
+            button("Lighting", "tool:lighting", { background = rgba(0.35, 0.28, 0.12, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.68, 0.55, 0.24, 1) } }),
+            button("Export",  "tool:export",  { background = rgba(0.22, 0.44, 0.26, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.42, 0.70, 0.46, 1) } }),
             ui.spacer { width = ui.grow(), height = ui.fixed(0) },
-            label("TerraUI AOT SDL+OpenGL demo", { text_color = rgba(0.68, 0.72, 0.78, 1), font_size = 14 }),
+            ui.column { gap = 2, width = ui.fit(), height = ui.fit() } {
+                label("TerraUI SDL + OpenGL demo", { font_size = 18 }),
+                label(ui.param_ref("status_secondary"), { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+            },
         },
 
         ui.row {
@@ -94,64 +164,96 @@ local decl = ui.component("sdl_gl_demo") {
         } {
             ui.scroll_region(panel {
                 id = ui.stable("assets"),
-                width = ui.fixed(240),
+                width = ui.fixed(250),
                 height = ui.grow(),
                 vertical = true,
-                scroll_y = 26,
-            }) {
-                label("Assets", { font_size = 20 }),
-                button("Terrain", "asset:terrain"),
-                button("Water", "asset:water"),
-                button("Roads", "asset:roads"),
-                button("Buildings", "asset:buildings"),
-                button("Labels", "asset:labels"),
-                button("Vegetation", "asset:vegetation"),
-                button("Lighting", "asset:lighting"),
-                button("Weather", "asset:weather"),
-                button("Vehicles", "asset:vehicles"),
-                button("Transit", "asset:transit"),
-                button("Utilities", "asset:utilities"),
-            },
+                scroll_y = 20,
+            }) (assets_children),
 
             ui.column {
                 id = ui.stable("center"),
                 width = ui.grow(),
                 height = ui.grow(),
-                gap = 10,
+                gap = 12,
             } {
-                label("Preview", { font_size = 22 }),
-                ui.image_view {
-                    id = ui.stable("preview"),
-                    image = "checker",
-                    width = ui.fixed(420),
-                    height = ui.fixed(250),
-                    aspect_ratio = 1.68,
-                    background = rgba(0.12, 0.13, 0.15, 1),
-                    border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.26, 0.28, 0.33, 1) },
-                    tint = rgba(1,1,1,1),
+                ui.row { width = ui.grow(), height = ui.fit(), gap = 10, align_y = ui.align_y.center } {
+                    ui.column { width = ui.grow(), height = ui.fit(), gap = 2 } {
+                        label(ui.param_ref("preview_title"), { font_size = 24 }),
+                        label(ui.param_ref("selected_asset"), { font_size = 14, text_color = ui.param_ref("accent") }),
+                    },
+                    ui.column {
+                        width = ui.fixed(18),
+                        height = ui.fixed(18),
+                        background = ui.param_ref("accent"),
+                        border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.95, 0.95, 0.98, 0.35) },
+                    } {},
                 },
-                ui.row(panel {
-                    id = ui.stable("status"),
+
+                ui.column(panel {
+                    id = ui.stable("preview_card"),
                     width = ui.fit(),
                     height = ui.fit(),
-                    gap = 16,
+                    gap = 10,
                 }) {
-                    label("Renderer: TerraUI kernel -> Terra AOT -> SDL3 -> OpenGL"),
-                    label("Input: pointer + action output"),
+                    ui.image_view {
+                        id = ui.stable("preview"),
+                        image = ui.param_ref("preview_image"),
+                        width = ui.fixed(520),
+                        height = ui.fixed(300),
+                        aspect_ratio = 1.73,
+                        border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.30, 0.32, 0.38, 1) },
+                        tint = rgba(1,1,1,1),
+                    },
+                    ui.custom {
+                        id = ui.stable("preview_overlay"),
+                        kind = "preview_guides",
+                        target = ui.float.by_id("preview"),
+                        element_point = ui.attach.left_top,
+                        parent_point = ui.attach.left_top,
+                        width = ui.fixed(520),
+                        height = ui.fixed(300),
+                        z_index = 12,
+                        pointer_capture = ui.pointer_capture.passthrough,
+                    },
+                    ui.row { width = ui.grow(), height = ui.fit(), gap = 16 } {
+                        ui.column { width = ui.fit(), height = ui.fit(), gap = 6 } {
+                            info_row("Tool", ui.param_ref("selected_tool")),
+                            info_row("Selection", ui.param_ref("selected_asset")),
+                            info_row("Info", ui.param_ref("detail_a")),
+                            info_row("State", ui.param_ref("detail_b")),
+                        },
+                        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+                        ui.column { width = ui.fit(), height = ui.fit(), gap = 8 } {
+                            progress_meter("Coverage", "progress_a"),
+                            progress_meter("Bake completion", "progress_b"),
+                        },
+                    },
                 },
+
+                ui.row(panel {
+                    id = ui.stable("status_strip"),
+                    width = ui.grow(),
+                    height = ui.fit(),
+                    gap = 18,
+                }) {
+                    label(ui.param_ref("status_primary")),
+                    label("Kernel: compiled layout + hit + emit", { text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    label("Backend: SDL_ttf + OpenGL immediate replay", { text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                },
+
                 ui.tooltip {
                     id = ui.stable("tooltip"),
                     target = ui.float.by_id("preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
-                    offset_x = 10,
+                    offset_x = 12,
                     offset_y = -10,
                     z_index = 20,
-                    padding = { left = 10, top = 8, right = 10, bottom = 8 },
-                    background = rgba(0.95, 0.80, 0.30, 0.95),
-                    border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.55, 0.40, 0.10, 1) },
+                    padding = { left = 12, top = 9, right = 12, bottom = 9 },
+                    background = rgba(0.96, 0.84, 0.34, 0.97),
+                    border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.56, 0.42, 0.10, 1) },
                 } {
-                    label("Floating tooltip attached to preview", {
+                    label(ui.param_ref("hint_text"), {
                         text_color = rgba(0.18, 0.14, 0.08, 1),
                         font_size = 14,
                     }),
@@ -160,18 +262,47 @@ local decl = ui.component("sdl_gl_demo") {
 
             ui.column(panel {
                 id = ui.stable("inspector"),
-                width = ui.fixed(280),
+                width = ui.fixed(300),
                 height = ui.grow(),
+                gap = 10,
             }) {
-                label("Inspector", { font_size = 20 }),
-                label("Type: Static-tree kernel"),
-                label("Layout: Clay-like row/column flow"),
-                label("Render: split streams merged by (z, seq)"),
-                label("Text: measured in kernel, rendered in backend"),
-                label("Clip: scissor stack replay"),
-                label("Float: tooltip attached by stable id"),
-                label("Build: ahead-of-time executable"),
+                label("Inspector", { font_size = 21 }),
+                label("Selection", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                info_row("Asset", ui.param_ref("selected_asset")),
+                info_row("Tool", ui.param_ref("selected_tool")),
+                info_row("Target", ui.param_ref("preview_title")),
+                ui.spacer { height = ui.fixed(8), width = ui.fixed(0) },
+                label("Renderer", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                label("• split streams merged by (z, seq)", { font_size = 14 }),
+                label("• CPU-side scissor stack replay", { font_size = 14 }),
+                label("• text measured in kernel, rasterized in backend", { font_size = 14 }),
+                ui.spacer { height = ui.fixed(8), width = ui.fixed(0) },
+                label("Diagnostics", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                label(ui.param_ref("detail_a"), { font_size = 14 }),
+                label(ui.param_ref("detail_b"), { font_size = 14 }),
+                ui.spacer { height = ui.fixed(8), width = ui.fixed(0) },
+                ui.custom {
+                    id = ui.stable("inspector_chart"),
+                    kind = "inspector_chart",
+                    width = ui.fixed(260),
+                    height = ui.fixed(96),
+                },
             },
+        },
+
+        ui.row {
+            id = ui.stable("footer"),
+            width = ui.grow(),
+            height = ui.fixed(34),
+            padding = { left = 14, top = 8, right = 14, bottom = 8 },
+            gap = 12,
+            align_y = ui.align_y.center,
+            background = rgba(0.09, 0.10, 0.12, 1),
+            border = ui.border { top = 1, color = rgba(0.20, 0.22, 0.26, 1) },
+        } {
+            label(ui.param_ref("footer_text"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
+            ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+            label("Terra AOT executable", { font_size = 13, text_color = rgba(0.52, 0.56, 0.62, 1) }),
         },
     },
 }
@@ -207,6 +338,26 @@ struct DemoApp {
     glctx: C.SDL_GLContext
     font: &C.TTF_Font
     checker_tex: uint32
+    terrain_tex: uint32
+    water_tex: uint32
+    roads_tex: uint32
+    blueprint_tex: uint32
+    heatmap_tex: uint32
+
+    selected_tool: rawstring
+    selected_asset: rawstring
+    status_primary: rawstring
+    status_secondary: rawstring
+    hint_text: rawstring
+    preview_image: rawstring
+    preview_title: rawstring
+    detail_a: rawstring
+    detail_b: rawstring
+    footer_text: rawstring
+    progress_a: float
+    progress_b: float
+    accent: compile.Color
+    tick: int32
 }
 
 local PacketArrayT = Packet[max_packets]
@@ -223,6 +374,10 @@ local SDL_EVENT_MOUSE_BUTTON_DOWN = 0x401
 local SDL_EVENT_MOUSE_BUTTON_UP = 0x402
 local SDL_EVENT_MOUSE_WHEEL = 0x403
 local SDL_BUTTON_LEFT = 1
+
+terra color(r: float, g: float, b: float, a: float) : compile.Color
+    return compile.Color { r, g, b, a }
+end
 
 terra packet_before(a: Packet, b: Packet) : bool
     if a.z < b.z then return true end
@@ -318,6 +473,15 @@ terra gl_quad(x: float, y: float, w: float, h: float)
     C.glEnd()
 end
 
+terra gl_line_rect(x: float, y: float, w: float, h: float)
+    C.glBegin(C.GL_LINE_LOOP)
+    C.glVertex2f(x, y)
+    C.glVertex2f(x + w, y)
+    C.glVertex2f(x + w, y + h)
+    C.glVertex2f(x, y + h)
+    C.glEnd()
+end
+
 terra draw_rect(cmd: compile.RectCmd)
     gl_color(cmd.color, cmd.opacity)
     gl_quad(cmd.x, cmd.y, cmd.w, cmd.h)
@@ -372,59 +536,204 @@ terra draw_text(app: &DemoApp, cmd: compile.TextCmd)
 
     var surf = C.TTF_RenderText_Blended(app.font, cmd.text, C.strlen(cmd.text), col)
     if surf == nil then return end
-    var rgba = C.SDL_ConvertSurface(surf, C.SDL_PIXELFORMAT_ABGR8888)
+    var rgba_surf = C.SDL_ConvertSurface(surf, C.SDL_PIXELFORMAT_ABGR8888)
     C.SDL_DestroySurface(surf)
-    if rgba == nil then return end
+    if rgba_surf == nil then return end
 
-    C.SDL_LockSurface(rgba)
-    var tex = upload_texture_rgba(rgba.w, rgba.h, rgba.pixels, true)
-    C.SDL_UnlockSurface(rgba)
+    C.SDL_LockSurface(rgba_surf)
+    var tex = upload_texture_rgba(rgba_surf.w, rgba_surf.h, rgba_surf.pixels, true)
+    C.SDL_UnlockSurface(rgba_surf)
 
-    draw_textured_quad(tex, cmd.x, cmd.y, [float](rgba.w), [float](rgba.h), cmd.color)
+    draw_textured_quad(tex, cmd.x, cmd.y, [float](rgba_surf.w), [float](rgba_surf.h), cmd.color)
     C.glDeleteTextures(1, &tex)
-    C.SDL_DestroySurface(rgba)
+    C.SDL_DestroySurface(rgba_surf)
 end
 
 terra draw_image(app: &DemoApp, cmd: compile.ImageCmd)
-    if cmd.image_id ~= nil and (C.strcmp(cmd.image_id, "checker") == 0 or C.strcmp(cmd.image_id, "preview") == 0) then
-        draw_textured_quad(app.checker_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
+    if cmd.image_id == nil then return end
+
+    if C.strcmp(cmd.image_id, "terrain") == 0 then
+        draw_textured_quad(app.terrain_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
+    elseif C.strcmp(cmd.image_id, "water") == 0 then
+        draw_textured_quad(app.water_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
+    elseif C.strcmp(cmd.image_id, "roads") == 0 then
+        draw_textured_quad(app.roads_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
+    elseif C.strcmp(cmd.image_id, "blueprint") == 0 then
+        draw_textured_quad(app.blueprint_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
+    elseif C.strcmp(cmd.image_id, "heatmap") == 0 then
+        draw_textured_quad(app.heatmap_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
     else
-        var c = cmd.tint
-        C.glColor4f(c.r, 0.2, 0.8, c.a)
-        gl_quad(cmd.x, cmd.y, cmd.w, cmd.h)
+        draw_textured_quad(app.checker_tex, cmd.x, cmd.y, cmd.w, cmd.h, cmd.tint)
     end
 end
 
 terra draw_custom(cmd: compile.CustomCmd)
-    C.glColor4f(1.0, 0.4, 0.1, 1.0)
-    C.glBegin(C.GL_LINE_LOOP)
-    C.glVertex2f(cmd.x, cmd.y)
-    C.glVertex2f(cmd.x + cmd.w, cmd.y)
-    C.glVertex2f(cmd.x + cmd.w, cmd.y + cmd.h)
-    C.glVertex2f(cmd.x, cmd.y + cmd.h)
-    C.glEnd()
+    if cmd.kind == nil then return end
+
+    if C.strcmp(cmd.kind, "preview_guides") == 0 then
+        C.glColor4f(1.0, 1.0, 1.0, 0.12)
+        var step: float = 32
+        var x = cmd.x + step
+        while x < cmd.x + cmd.w do
+            C.glBegin(C.GL_LINES)
+            C.glVertex2f(x, cmd.y)
+            C.glVertex2f(x, cmd.y + cmd.h)
+            C.glEnd()
+            x = x + step
+        end
+        var y = cmd.y + step
+        while y < cmd.y + cmd.h do
+            C.glBegin(C.GL_LINES)
+            C.glVertex2f(cmd.x, y)
+            C.glVertex2f(cmd.x + cmd.w, y)
+            C.glEnd()
+            y = y + step
+        end
+        C.glColor4f(1.0, 0.85, 0.30, 0.55)
+        C.glBegin(C.GL_LINES)
+        C.glVertex2f(cmd.x + cmd.w * 0.5, cmd.y)
+        C.glVertex2f(cmd.x + cmd.w * 0.5, cmd.y + cmd.h)
+        C.glVertex2f(cmd.x, cmd.y + cmd.h * 0.5)
+        C.glVertex2f(cmd.x + cmd.w, cmd.y + cmd.h * 0.5)
+        C.glEnd()
+        C.glColor4f(1.0, 1.0, 1.0, 0.20)
+        gl_line_rect(cmd.x + 18, cmd.y + 18, cmd.w - 36, cmd.h - 36)
+    elseif C.strcmp(cmd.kind, "inspector_chart") == 0 then
+        C.glColor4f(0.14, 0.16, 0.20, 1.0)
+        gl_quad(cmd.x, cmd.y, cmd.w, cmd.h)
+        C.glColor4f(0.22, 0.24, 0.28, 1.0)
+        gl_line_rect(cmd.x, cmd.y, cmd.w, cmd.h)
+        var bars = 10
+        var bar_w = (cmd.w - 22) / [float](bars)
+        for i = 0, bars - 1 do
+            var h = 18 + [float]((i * 13) % 44)
+            var bx = cmd.x + 10 + [float](i) * bar_w
+            var by = cmd.y + cmd.h - 8 - h
+            C.glColor4f(0.42 + [float](i) * 0.03, 0.56, 0.90 - [float](i) * 0.03, 0.95)
+            gl_quad(bx, by, bar_w - 4, h)
+        end
+    else
+        C.glColor4f(1.0, 0.4, 0.1, 1.0)
+        gl_line_rect(cmd.x, cmd.y, cmd.w, cmd.h)
+    end
 end
 
-terra init_checker_texture(app: &DemoApp)
-    var pixels: uint8[64 * 64 * 4]
-    for y = 0, 64 do
-        for x = 0, 64 do
-            var idx = (y * 64 + x) * 4
-            var dark = ((x / 8) + (y / 8)) % 2 == 0
-            if dark then
-                pixels[idx + 0] = 70
-                pixels[idx + 1] = 76
-                pixels[idx + 2] = 88
+terra init_texture_pattern(tex_out: &uint32, pattern: int32)
+    var pixels: uint8[128 * 128 * 4]
+    for y = 0, 128 do
+        for x = 0, 128 do
+            var idx = (y * 128 + x) * 4
+            if pattern == 0 then
+                var dark = ((x / 16) + (y / 16)) % 2 == 0
+                if dark then
+                    pixels[idx + 0] = 72; pixels[idx + 1] = 78; pixels[idx + 2] = 90; pixels[idx + 3] = 255
+                else
+                    pixels[idx + 0] = 160; pixels[idx + 1] = 168; pixels[idx + 2] = 182; pixels[idx + 3] = 255
+                end
+            elseif pattern == 1 then
+                pixels[idx + 0] = 60 + [uint8]((x * 35) / 128)
+                pixels[idx + 1] = 96 + [uint8]((y * 90) / 128)
+                pixels[idx + 2] = 48 + [uint8](((x + y) * 20) / 128)
                 pixels[idx + 3] = 255
+                if ((x / 12) + (y / 10)) % 5 == 0 then
+                    pixels[idx + 0] = 126; pixels[idx + 1] = 182; pixels[idx + 2] = 86
+                end
+            elseif pattern == 2 then
+                pixels[idx + 0] = 34
+                pixels[idx + 1] = 84 + [uint8]((x * 44) / 128)
+                pixels[idx + 2] = 156 + [uint8]((y * 68) / 128)
+                pixels[idx + 3] = 255
+                if (y / 10) % 3 == 0 then
+                    pixels[idx + 0] = 72; pixels[idx + 1] = 170; pixels[idx + 2] = 220
+                end
+            elseif pattern == 3 then
+                pixels[idx + 0] = 76
+                pixels[idx + 1] = 78
+                pixels[idx + 2] = 84
+                pixels[idx + 3] = 255
+                if x % 24 < 6 or y % 24 < 6 then
+                    pixels[idx + 0] = 120; pixels[idx + 1] = 124; pixels[idx + 2] = 132
+                end
+                if x % 32 >= 14 and x % 32 <= 18 then
+                    pixels[idx + 0] = 220; pixels[idx + 1] = 190; pixels[idx + 2] = 68
+                end
+            elseif pattern == 4 then
+                pixels[idx + 0] = 24 + [uint8]((x * 40) / 128)
+                pixels[idx + 1] = 34 + [uint8]((y * 24) / 128)
+                pixels[idx + 2] = 76 + [uint8]((x * 86) / 128)
+                pixels[idx + 3] = 255
+                if x % 16 == 0 or y % 16 == 0 then
+                    pixels[idx + 0] = 94; pixels[idx + 1] = 168; pixels[idx + 2] = 255
+                end
             else
-                pixels[idx + 0] = 170
-                pixels[idx + 1] = 176
-                pixels[idx + 2] = 188
+                pixels[idx + 0] = [uint8]((x * 255) / 128)
+                pixels[idx + 1] = [uint8]((y * 255) / 128)
+                pixels[idx + 2] = [uint8](255 - ((x * 255) / 128))
                 pixels[idx + 3] = 255
             end
         end
     end
-    app.checker_tex = upload_texture_rgba(64, 64, [&opaque](&pixels[0]), false)
+    @tex_out = upload_texture_rgba(128, 128, [&opaque](&pixels[0]), false)
+end
+
+terra init_textures(app: &DemoApp)
+    init_texture_pattern(&app.checker_tex, 0)
+    init_texture_pattern(&app.terrain_tex, 1)
+    init_texture_pattern(&app.water_tex, 2)
+    init_texture_pattern(&app.roads_tex, 3)
+    init_texture_pattern(&app.blueprint_tex, 4)
+    init_texture_pattern(&app.heatmap_tex, 5)
+end
+
+terra apply_asset_profile(app: &DemoApp, asset_name: rawstring)
+    app.selected_asset = asset_name
+
+    if C.strcmp(asset_name, "Terrain") == 0 then
+        app.preview_image = "terrain"
+        app.preview_title = "Terrain composite"
+        app.detail_a = "Asset type: tile set"
+        app.detail_b = "Build channel: sculpt preview"
+        app.hint_text = "Terrain preview: contour guides + focal center"
+        app.accent = color(0.42, 0.70, 0.32, 1.0)
+        app.progress_a = 174
+        app.progress_b = 126
+    elseif C.strcmp(asset_name, "Water") == 0 then
+        app.preview_image = "water"
+        app.preview_title = "Water simulation"
+        app.detail_a = "Asset type: fluid layer"
+        app.detail_b = "Build channel: ripple solve"
+        app.hint_text = "Water preview: horizon-safe crop and wave field"
+        app.accent = color(0.26, 0.64, 0.92, 1.0)
+        app.progress_a = 142
+        app.progress_b = 188
+    elseif C.strcmp(asset_name, "Roads") == 0 then
+        app.preview_image = "roads"
+        app.preview_title = "Road network"
+        app.detail_a = "Asset type: lane graph"
+        app.detail_b = "Build channel: signage bake"
+        app.hint_text = "Road preview: guide grid aligned to lane stitching"
+        app.accent = color(0.90, 0.74, 0.22, 1.0)
+        app.progress_a = 196
+        app.progress_b = 104
+    elseif C.strcmp(asset_name, "Blueprint") == 0 then
+        app.preview_image = "blueprint"
+        app.preview_title = "Blueprint overlay"
+        app.detail_a = "Asset type: design layer"
+        app.detail_b = "Build channel: markup review"
+        app.hint_text = "Blueprint preview: read margins, overlays, and label fit"
+        app.accent = color(0.36, 0.62, 1.0, 1.0)
+        app.progress_a = 118
+        app.progress_b = 152
+    else
+        app.preview_image = "heatmap"
+        app.preview_title = "Heatmap diagnostics"
+        app.detail_a = "Asset type: analysis pass"
+        app.detail_b = "Build channel: hotspot review"
+        app.hint_text = "Heatmap preview: compare hot zones against focal frame"
+        app.accent = color(0.98, 0.42, 0.28, 1.0)
+        app.progress_a = 156
+        app.progress_b = 86
+    end
 end
 
 terra app_init(app: &DemoApp, hidden: bool) : int
@@ -439,7 +748,7 @@ terra app_init(app: &DemoApp, hidden: bool) : int
     var flags = [uint64]([SDL_WINDOW_OPENGL + SDL_WINDOW_RESIZABLE + SDL_WINDOW_HIGH_PIXEL_DENSITY])
     if hidden then flags = flags + [uint64]([SDL_WINDOW_HIDDEN]) end
 
-    app.window = C.SDL_CreateWindow("TerraUI SDL+OpenGL Demo", 1280, 800, flags)
+    app.window = C.SDL_CreateWindow("TerraUI SDL+OpenGL Demo", 1380, 860, flags)
     if app.window == nil then
         C.TTF_Quit()
         C.SDL_Quit()
@@ -467,12 +776,24 @@ terra app_init(app: &DemoApp, hidden: bool) : int
     C.glDisable(C.GL_DEPTH_TEST)
     C.glEnable(C.GL_BLEND)
     C.glBlendFunc(C.GL_SRC_ALPHA, C.GL_ONE_MINUS_SRC_ALPHA)
-    init_checker_texture(app)
+    init_textures(app)
+
+    app.selected_tool = "Inspect"
+    app.status_primary = "Ready"
+    app.status_secondary = "Compiled kernel + presenter-style GL replay"
+    app.footer_text = "Cursor idle"
+    app.tick = 0
+    apply_asset_profile(app, "Terrain")
     return 0
 end
 
 terra app_shutdown(app: &DemoApp)
     if app.checker_tex ~= 0 then C.glDeleteTextures(1, &app.checker_tex) end
+    if app.terrain_tex ~= 0 then C.glDeleteTextures(1, &app.terrain_tex) end
+    if app.water_tex ~= 0 then C.glDeleteTextures(1, &app.water_tex) end
+    if app.roads_tex ~= 0 then C.glDeleteTextures(1, &app.roads_tex) end
+    if app.blueprint_tex ~= 0 then C.glDeleteTextures(1, &app.blueprint_tex) end
+    if app.heatmap_tex ~= 0 then C.glDeleteTextures(1, &app.heatmap_tex) end
     if app.font ~= nil then C.TTF_CloseFont(app.font) end
     if app.glctx ~= nil then C.SDL_GL_DestroyContext(app.glctx) end
     if app.window ~= nil then C.SDL_DestroyWindow(app.window) end
@@ -522,9 +843,26 @@ terra pump_input(app: &DemoApp, frame: &Frame, quit: &bool)
     frame.viewport_h = [float](vh)
 end
 
+terra sync_params(frame: &Frame, app: &DemoApp)
+    -- param order matches `params` declaration above.
+    frame.params.p0 = app.selected_tool
+    frame.params.p1 = app.selected_asset
+    frame.params.p2 = app.status_primary
+    frame.params.p3 = app.status_secondary
+    frame.params.p4 = app.hint_text
+    frame.params.p5 = app.preview_image
+    frame.params.p6 = app.preview_title
+    frame.params.p7 = app.detail_a
+    frame.params.p8 = app.detail_b
+    frame.params.p9 = app.footer_text
+    frame.params.p10 = app.progress_a
+    frame.params.p11 = app.progress_b
+    frame.params.p12 = app.accent
+end
+
 terra begin_frame(vw: int32, vh: int32)
     C.glViewport(0, 0, vw, vh)
-    C.glClearColor(0.06, 0.07, 0.09, 1.0)
+    C.glClearColor(0.05, 0.06, 0.08, 1.0)
     C.glClear(C.GL_COLOR_BUFFER_BIT)
     C.glMatrixMode(C.GL_PROJECTION)
     C.glLoadIdentity()
@@ -594,34 +932,79 @@ end
 
 terra maybe_handle_action(app: &DemoApp, frame: &Frame)
     if frame.action_name == nil then return end
-    if C.strcmp(frame.action_name, "inspect") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Inspect")
-    elseif C.strcmp(frame.action_name, "apply") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Apply")
-    elseif C.strcmp(frame.action_name, "export") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Export")
+
+    if C.strcmp(frame.action_name, "tool:inspect") == 0 then
+        app.selected_tool = "Inspect"
+        app.status_primary = "Inspect tool armed"
+        app.status_secondary = "Reviewing bounds, clips, and layout metadata"
+    elseif C.strcmp(frame.action_name, "tool:paint") == 0 then
+        app.selected_tool = "Paint"
+        app.status_primary = "Paint tool armed"
+        app.status_secondary = "Brush preview locked to current selection"
+    elseif C.strcmp(frame.action_name, "tool:lighting") == 0 then
+        app.selected_tool = "Lighting"
+        app.status_primary = "Lighting tool armed"
+        app.status_secondary = "Evaluating highlights, fog, and exposure"
+    elseif C.strcmp(frame.action_name, "tool:export") == 0 then
+        app.selected_tool = "Export"
+        app.status_primary = "Export requested"
+        app.status_secondary = "Preparing artifact bundle from compiled UI state"
     elseif C.strcmp(frame.action_name, "asset:terrain") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Terrain")
+        app.status_primary = "Selection changed"
+        apply_asset_profile(app, "Terrain")
     elseif C.strcmp(frame.action_name, "asset:water") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Water")
+        app.status_primary = "Selection changed"
+        apply_asset_profile(app, "Water")
     elseif C.strcmp(frame.action_name, "asset:roads") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Roads")
-    elseif C.strcmp(frame.action_name, "asset:buildings") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Buildings")
-    elseif C.strcmp(frame.action_name, "asset:labels") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Labels")
-    elseif C.strcmp(frame.action_name, "asset:vegetation") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Vegetation")
-    elseif C.strcmp(frame.action_name, "asset:lighting") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Lighting")
-    elseif C.strcmp(frame.action_name, "asset:weather") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Weather")
-    elseif C.strcmp(frame.action_name, "asset:vehicles") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Vehicles")
-    elseif C.strcmp(frame.action_name, "asset:transit") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Transit")
-    elseif C.strcmp(frame.action_name, "asset:utilities") == 0 then
-        C.SDL_SetWindowTitle(app.window, "TerraUI Demo - Utilities")
+        app.status_primary = "Selection changed"
+        apply_asset_profile(app, "Roads")
+    elseif C.strcmp(frame.action_name, "asset:blueprint") == 0 then
+        app.status_primary = "Selection changed"
+        apply_asset_profile(app, "Blueprint")
+    elseif C.strcmp(frame.action_name, "asset:heatmap") == 0 then
+        app.status_primary = "Selection changed"
+        apply_asset_profile(app, "Heatmap")
+    end
+
+    C.SDL_SetWindowTitle(app.window, app.preview_title)
+end
+
+terra update_live_state(app: &DemoApp, frame: &Frame)
+    app.tick = app.tick + 1
+
+    var wave = [float](app.tick % 64)
+    var base_a = app.progress_a
+    var base_b = app.progress_b
+    app.progress_a = 110 + (wave * 1.4f)
+    app.progress_b = 72 + ([float]((app.tick * 3) % 92) * 1.2f)
+
+    if frame.cursor_name ~= nil then
+        app.footer_text = "Cursor: pointer over interactive control"
+    elseif frame.hit.hot >= 0 then
+        app.footer_text = "Cursor: hovering layout node"
+    else
+        app.footer_text = "Cursor idle"
+    end
+
+    if frame.action_name ~= nil then
+        app.footer_text = "Action emitted from compiled kernel"
+    end
+
+    if C.strcmp(app.selected_asset, "Terrain") == 0 then
+        app.progress_a = 150 + wave * 0.8f
+        app.progress_b = 92 + [float]((app.tick * 5) % 60)
+    elseif C.strcmp(app.selected_asset, "Water") == 0 then
+        app.progress_a = 118 + [float]((app.tick * 3) % 80)
+        app.progress_b = 142 + [float]((app.tick * 2) % 50)
+    elseif C.strcmp(app.selected_asset, "Roads") == 0 then
+        app.progress_a = 176 + [float]((app.tick * 2) % 30)
+        app.progress_b = 84 + [float]((app.tick * 4) % 76)
+    elseif C.strcmp(app.selected_asset, "Blueprint") == 0 then
+        app.progress_a = 96 + [float]((app.tick * 2) % 66)
+        app.progress_b = 132 + [float]((app.tick * 3) % 48)
+    else
+        app.progress_a = 142 + [float]((app.tick * 6) % 70)
+        app.progress_b = 70 + [float]((app.tick * 5) % 88)
     end
 end
 
@@ -640,11 +1023,14 @@ terra main(argc: int, argv: &rawstring)
     app.glctx = nil
     app.font = nil
     app.checker_tex = 0
+    app.terrain_tex = 0
+    app.water_tex = 0
+    app.roads_tex = 0
+    app.blueprint_tex = 0
+    app.heatmap_tex = 0
 
     var rc = app_init(&app, hidden)
-    if rc ~= 0 then
-        return rc
-    end
+    if rc ~= 0 then return rc end
 
     var frame: Frame
     [init_q](&frame)
@@ -653,8 +1039,11 @@ terra main(argc: int, argv: &rawstring)
     var frames = 0
     while not quit and (max_frames < 0 or frames < max_frames) do
         pump_input(&app, &frame, &quit)
+        sync_params(&frame, &app)
         [run_q](&frame)
         maybe_handle_action(&app, &frame)
+        update_live_state(&app, &frame)
+        sync_params(&frame, &app)
         replay(&app, &frame)
         frames = frames + 1
     end
