@@ -224,6 +224,12 @@ do
     assert(not ok2)
     assert(err2:match("unknown widget prop"))
 
+    local ok_type, err_type = pcall(function()
+        ui.use(card) { id = ui.stable("c2b"), title = 42 } {}
+    end)
+    assert(not ok_type)
+    assert(err_type:match("widget prop type mismatch"))
+
     local ok3, err3 = pcall(function()
         ui.use(card) { id = ui.stable("c3"), title = "Hi" } {
             side = { ui.label { text = "X" } },

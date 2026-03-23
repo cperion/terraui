@@ -184,12 +184,13 @@ Validator rule:
 6. Unknown widget props are illegal.
 7. Duplicate widget prop arguments are illegal.
 8. Missing required widget props are illegal.
-9. Unknown widget slots are illegal.
-10. Duplicate widget slot arguments are illegal.
-11. `SlotRef(name)` is only valid while elaborating a widget body.
-12. `WidgetPropRef(name)` is only valid while binding a widget body.
-13. `StateRef(name)` inside a widget body may refer to widget-local state first, then component state.
-14. Direct or mutual recursive widget expansion is illegal in v1.
+9. Widget prop expressions/defaults with known types must be compatible with the declared widget prop type.
+10. Unknown widget slots are illegal.
+11. Duplicate widget slot arguments are illegal.
+12. `SlotRef(name)` is only valid while elaborating a widget body.
+13. `WidgetPropRef(name)` is only valid while binding a widget body.
+14. `StateRef(name)` inside a widget body may refer to widget-local state first, then component state.
+15. Direct or mutual recursive widget expansion is illegal in v1.
 
 ## 5.4 Layout rules
 

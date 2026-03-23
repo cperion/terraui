@@ -600,4 +600,47 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- Test 17: widget prop types validate against component param types at bind
+---------------------------------------------------------------------------
+
+do
+    local card = Decl.WidgetDef(
+        "TypedCard",
+        List{ Decl.WidgetProp("title", Decl.TString, nil) },
+        List(),
+        List{ Decl.WidgetSlot("children") },
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil,
+            Decl.Text(Decl.TextLeaf(Decl.WidgetPropRef("title"), text_style())),
+            List()))
+
+    local bad = component(
+        "widget_type_bind",
+        List{ Decl.Param("count", Decl.TNumber, nil) },
+        List(),
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil, nil,
+            child_list {
+                Decl.WidgetChild(Decl.WidgetCall(
+                    Decl.Stable("card1"),
+                    "TypedCard",
+                    List{ Decl.PropArg("title", Decl.ParamRef("count")) },
+                    List()))
+            }),
+        List{ card })
+
+    local ok, err = pcall(function()
+        bind.bind_component(bad)
+    end)
+    assert(not ok)
+    assert(err:match("widget prop type mismatch"))
+
+    print("  test 17 (widget prop type validation): ok")
+end
+
+---------------------------------------------------------------------------
 print("bind test passed")

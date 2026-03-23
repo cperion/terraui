@@ -324,6 +324,8 @@ Lowering notes:
 - `ui.widget_prop(...)` returns `Decl.WidgetProp`
 - `ui.widget_slot(...)` returns `Decl.WidgetSlot`
 - `ui.use(...)` accepts either a widget name or a `Decl.WidgetDef`; when the widget is known at capture time, props/slots are validated immediately
+- widget prop values with statically obvious types are checked at DSL capture time
+- widget prop values whose types depend on component params/state are checked during bind
 - `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
 - `ui.path_id(...)` joins stable id path segments with `/`
@@ -432,8 +434,10 @@ The current DSL fails early on:
 - invalid ids / size / padding inputs
 - missing required widget props at DSL capture time when the widget definition is known
 - unknown widget props/slots at DSL capture time when the widget definition is known
+- obvious widget prop type mismatches at DSL capture time (for example passing a number literal to a string prop)
 - duplicate widget names / prop names / slot names during bind
 - unknown widget names during bind when the widget definition was not available at DSL capture time
+- context-aware widget prop type mismatches during bind (for example passing `param_ref` of the wrong declared type)
 - duplicate widget slot arguments during bind
 - `ui.slot(...)` / `Decl.SlotRef(...)` used outside widget bodies during bind
 

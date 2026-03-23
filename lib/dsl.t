@@ -226,12 +226,80 @@ local function widget_fields(def)
     return props, slots
 end
 
+local function type_name(ty)
+    if ty == Decl.TBool then return "bool"
+    elseif ty == Decl.TNumber then return "number"
+    elseif ty == Decl.TString then return "string"
+    elseif ty == Decl.TColor then return "color"
+    elseif ty == Decl.TImage then return "image"
+    elseif ty == Decl.TVec2 then return "vec2"
+    elseif ty == Decl.TAny then return "any"
+    end
+    return tostring(ty)
+end
+
+local function is_type_compatible(expected, got)
+    if expected == nil or got == nil then return true end
+    if expected == Decl.TAny then return true end
+    if expected == got then return true end
+    if expected == Decl.TImage and got == Decl.TString then return true end
+    return false
+end
+
+local function static_expr_type(expr)
+    if expr == nil then return nil end
+    local k = expr.kind
+    if k == "BoolLit" then return Decl.TBool
+    elseif k == "NumLit" then return Decl.TNumber
+    elseif k == "StringLit" then return Decl.TString
+    elseif k == "ColorLit" then return Decl.TColor
+    elseif k == "Vec2Lit" then return Decl.TVec2
+    elseif k == "Unary" then
+        local rhs = static_expr_type(expr.rhs)
+        if expr.op == "not" and rhs == Decl.TBool then return Decl.TBool end
+        if expr.op == "-" and rhs == Decl.TNumber then return Decl.TNumber end
+        return nil
+    elseif k == "Binary" then
+        local lhs = static_expr_type(expr.lhs)
+        local rhs = static_expr_type(expr.rhs)
+        if lhs == nil or rhs == nil then return nil end
+        if (expr.op == "+" or expr.op == "-" or expr.op == "*" or expr.op == "/")
+            and lhs == Decl.TNumber and rhs == Decl.TNumber then
+            return Decl.TNumber
+        end
+        if (expr.op == "and" or expr.op == "or")
+            and lhs == Decl.TBool and rhs == Decl.TBool then
+            return Decl.TBool
+        end
+        if expr.op == "==" or expr.op == "!=" or expr.op == "<" or expr.op == ">" or expr.op == "<=" or expr.op == ">=" then
+            return Decl.TBool
+        end
+        return nil
+    elseif k == "Select" then
+        local y = static_expr_type(expr.yes)
+        local n = static_expr_type(expr.no)
+        if y ~= nil and n ~= nil and (y == n or is_type_compatible(y, n) or is_type_compatible(n, y)) then
+            return y
+        end
+        return nil
+    end
+    return nil
+end
+
 local function validate_widget_props(def, props)
     if def == nil then return end
     local prop_defs = widget_fields(def)
-    for k, _ in pairs(props) do
+    for k, v in pairs(props) do
         if k ~= "id" and k ~= "slots" and prop_defs[k] == nil then
             error("unknown widget prop in DSL for " .. def.name .. ": " .. tostring(k))
+        end
+        if k ~= "id" and k ~= "slots" and prop_defs[k] ~= nil then
+            local expr = M.as_expr(v)
+            local got = static_expr_type(expr)
+            local expected = prop_defs[k].ty
+            if got ~= nil and not is_type_compatible(expected, got) then
+                error("widget prop type mismatch in DSL for " .. def.name .. ": " .. k .. " expected " .. type_name(expected) .. ", got " .. type_name(got))
+            end
         end
     end
     for name, p in pairs(prop_defs) do

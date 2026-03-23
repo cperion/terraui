@@ -348,6 +348,8 @@ ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
 ### Notes
 - `ui.use(...)` accepts either a widget name or a `Decl.WidgetDef`
 - when the widget definition is known at capture time, required/unknown props and slot names are validated immediately
+- when a prop expression has a statically obvious type, type mismatches are also rejected immediately
+- additional context-aware type mismatches are rejected during bind
 - optional named slot arguments can be passed through `props.slots`
 - the second brace may be either:
   - an ordered child list for the conventional `children` slot

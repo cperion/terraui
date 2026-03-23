@@ -20,7 +20,9 @@ function BindCtx.new(opts)
     opts = opts or {}
     return setmetatable({
         _param_slots       = {},
+        _param_types       = {},
         _state_slots       = {},
+        _state_types       = {},
         _widget_defs       = {},
         _bound_widget_state = nil,
         _next_param        = 0,
@@ -35,19 +37,21 @@ function BindCtx.new(opts)
     }, BindCtx)
 end
 
-function BindCtx:register_param(name)
+function BindCtx:register_param(name, ty)
     if self._param_slots[name] ~= nil then
         error("duplicate param name: " .. name)
     end
     self._param_slots[name] = self._next_param
+    self._param_types[name] = ty
     self._next_param = self._next_param + 1
 end
 
-function BindCtx:register_state(name)
+function BindCtx:register_state(name, ty)
     if self._state_slots[name] ~= nil then
         error("duplicate state name: " .. name)
     end
     self._state_slots[name] = self._next_state
+    self._state_types[name] = ty
     self._next_state = self._next_state + 1
 end
 
@@ -55,6 +59,12 @@ function BindCtx:param_slot(name)
     local slot = self._param_slots[name]
     if slot == nil then error("unknown param: " .. name) end
     return slot
+end
+
+function BindCtx:param_type(name)
+    local ty = self._param_types[name]
+    if ty == nil then error("unknown param: " .. name) end
+    return ty
 end
 
 function BindCtx:state_slot(name)
@@ -65,6 +75,16 @@ function BindCtx:state_slot(name)
     local slot = self._state_slots[name]
     if slot == nil then error("unknown state: " .. name) end
     return slot
+end
+
+function BindCtx:state_type(name)
+    local frame = self:current_widget_frame()
+    if frame and frame.local_state_types[name] ~= nil then
+        return frame.local_state_types[name]
+    end
+    local ty = self._state_types[name]
+    if ty == nil then error("unknown state: " .. name) end
+    return ty
 end
 
 function BindCtx:alloc_node_id()
@@ -154,7 +174,7 @@ end
 
 function BindCtx:register_widget_state_decl(scope, decl_state)
     local scoped_name = scope .. "/" .. decl_state.name
-    self:register_state(scoped_name)
+    self:register_state(scoped_name, decl_state.ty)
     local slot = self._state_slots[scoped_name]
     return scoped_name, slot
 end
@@ -238,6 +258,83 @@ local function widget_scope_from_id(call, ctx)
         return call.id.name .. "/" .. tostring(salt)
     else
         error("unknown WidgetCall id kind: " .. tostring(call.id.kind))
+    end
+end
+
+---------------------------------------------------------------------------
+-- Decl expression typing helpers
+---------------------------------------------------------------------------
+
+local function type_name(ty)
+    if ty == Decl.TBool then return "bool"
+    elseif ty == Decl.TNumber then return "number"
+    elseif ty == Decl.TString then return "string"
+    elseif ty == Decl.TColor then return "color"
+    elseif ty == Decl.TImage then return "image"
+    elseif ty == Decl.TVec2 then return "vec2"
+    elseif ty == Decl.TAny then return "any"
+    end
+    return tostring(ty)
+end
+
+local function is_type_compatible(expected, got)
+    if expected == nil or got == nil then return true end
+    if expected == Decl.TAny then return true end
+    if expected == got then return true end
+    if expected == Decl.TImage and got == Decl.TString then return true end
+    return false
+end
+
+local function infer_decl_expr_type(ctx, expr)
+    if expr == nil then return nil end
+    local k = expr.kind
+    if k == "BoolLit" then return Decl.TBool
+    elseif k == "NumLit" then return Decl.TNumber
+    elseif k == "StringLit" then return Decl.TString
+    elseif k == "ColorLit" then return Decl.TColor
+    elseif k == "Vec2Lit" then return Decl.TVec2
+    elseif k == "ParamRef" then return ctx:param_type(expr.name)
+    elseif k == "StateRef" then return ctx:state_type(expr.name)
+    elseif k == "WidgetPropRef" then
+        local frame = ctx:current_widget_frame()
+        return frame and frame.prop_types[expr.name] or nil
+    elseif k == "Unary" then
+        local rhs = infer_decl_expr_type(ctx, expr.rhs)
+        if expr.op == "not" and rhs == Decl.TBool then return Decl.TBool end
+        if expr.op == "-" and rhs == Decl.TNumber then return Decl.TNumber end
+        return nil
+    elseif k == "Binary" then
+        local lhs = infer_decl_expr_type(ctx, expr.lhs)
+        local rhs = infer_decl_expr_type(ctx, expr.rhs)
+        if lhs == nil or rhs == nil then return nil end
+        if (expr.op == "+" or expr.op == "-" or expr.op == "*" or expr.op == "/")
+            and lhs == Decl.TNumber and rhs == Decl.TNumber then
+            return Decl.TNumber
+        end
+        if (expr.op == "and" or expr.op == "or")
+            and lhs == Decl.TBool and rhs == Decl.TBool then
+            return Decl.TBool
+        end
+        if expr.op == "==" or expr.op == "!=" or expr.op == "<" or expr.op == ">" or expr.op == "<=" or expr.op == ">=" then
+            return Decl.TBool
+        end
+        return nil
+    elseif k == "Select" then
+        local y = infer_decl_expr_type(ctx, expr.yes)
+        local n = infer_decl_expr_type(ctx, expr.no)
+        if y ~= nil and n ~= nil and (y == n or is_type_compatible(y, n) or is_type_compatible(n, y)) then
+            return y
+        end
+        return nil
+    else
+        return nil
+    end
+end
+
+local function assert_expr_type_compatible(ctx, expr, expected, label)
+    local got = infer_decl_expr_type(ctx, expr)
+    if got ~= nil and not is_type_compatible(expected, got) then
+        error(label .. " expected " .. type_name(expected) .. ", got " .. type_name(got))
     end
 end
 
@@ -551,11 +648,15 @@ function BindCtx:bind_widget_call(call)
         if prop_defs[arg.name] == nil then
             error("unknown widget prop for " .. call.name .. ": " .. arg.name)
         end
+        assert_expr_type_compatible(self, arg.value, prop_defs[arg.name].ty,
+            "widget prop type mismatch for " .. call.name .. ": " .. arg.name)
         props[arg.name] = arg.value
     end
     for name, p in pairs(prop_defs) do
         if props[name] == nil then
             if p.default ~= nil then
+                assert_expr_type_compatible(self, p.default, p.ty,
+                    "widget prop default type mismatch for " .. def.name .. ": " .. name)
                 props[name] = p.default
             else
                 error("missing widget prop for " .. call.name .. ": " .. name)
@@ -592,18 +693,29 @@ function BindCtx:bind_widget_call(call)
         self:push_override_id(call.id)
     end
 
+    local prop_types = {}
+    for name, p in pairs(prop_defs) do prop_types[name] = p.ty end
+    local local_state_types = {}
+    for _, s in ipairs(def.state) do local_state_types[s.name] = s.ty end
+
     local frame = {
         name = call.name,
         scope = scope,
         props = props,
+        prop_types = prop_types,
         slots = slots,
         local_state_slots = local_state_slots,
         local_state_names = local_state_names,
+        local_state_types = local_state_types,
         _resolving = {},
     }
 
     self:push_widget_frame(frame)
     for _, s in ipairs(def.state) do
+        if s.initial ~= nil then
+            assert_expr_type_compatible(self, s.initial, s.ty,
+                "widget state initial type mismatch for " .. def.name .. ": " .. s.name)
+        end
         local initial = s.initial and s.initial:bind(self) or nil
         self._bound_widget_state:insert(Bound.StateSlot(
             local_state_names[s.name], s.ty, local_state_slots[s.name], initial))
@@ -649,10 +761,18 @@ end
 ---------------------------------------------------------------------------
 
 function Decl.Param:bind(ctx)
+    if self.default ~= nil then
+        assert_expr_type_compatible(ctx, self.default, self.ty,
+            "param default type mismatch for " .. self.name)
+    end
     return Bound.Param(self.name, self.ty, ctx:param_slot(self.name))
 end
 
 function Decl.StateSlot:bind(ctx)
+    if self.initial ~= nil then
+        assert_expr_type_compatible(ctx, self.initial, self.ty,
+            "state initial type mismatch for " .. self.name)
+    end
     local initial = self.initial and self.initial:bind(ctx) or nil
     return Bound.StateSlot(
         self.name, self.ty, ctx:state_slot(self.name), initial)
@@ -665,8 +785,8 @@ end
 function Decl.Component:bind(ctx)
     -- Register slots before binding anything
     ctx._bound_widget_state = List()
-    for _, p in ipairs(self.params) do ctx:register_param(p.name) end
-    for _, s in ipairs(self.state) do ctx:register_state(s.name) end
+    for _, p in ipairs(self.params) do ctx:register_param(p.name, p.ty) end
+    for _, s in ipairs(self.state) do ctx:register_state(s.name, s.ty) end
     for _, w in ipairs(self.widgets) do ctx:register_widget(w) end
 
     local bound_params = List()
