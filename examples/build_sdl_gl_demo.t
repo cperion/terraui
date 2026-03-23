@@ -392,7 +392,7 @@ local decl = ui.component("sdl_gl_demo") {
         width = ui.grow(),
         height = ui.grow(),
     } {
-        ui.use(Shell) { id = app } {
+        ui.use(Shell) { key = app } {
         toolbar = {
             ui.use(ToolbarBar) { id = ui.stable("toolbar") } {
                 primary = {
@@ -432,10 +432,10 @@ local decl = ui.component("sdl_gl_demo") {
                     accent = ui.param_ref("accent"),
                 } {},
 
-                ui.use(PreviewCard) { id = preview_card } {
+                ui.use(PreviewCard) { key = preview_card } {
                     media = {
                         ui.image_view {
-                            id = ui.stable("preview"),
+                            ref = "preview",
                             image = ui.param_ref("preview_image"),
                             width = ui.fixed(520),
                             height = ui.fixed(300),
@@ -444,9 +444,9 @@ local decl = ui.component("sdl_gl_demo") {
                             tint = rgba(1,1,1,1),
                         },
                         ui.custom {
-                            id = ui.stable("preview_overlay"),
+                            key = ui.stable("preview_overlay"),
                             kind = "preview_guides",
-                            target = ui.float.by_id("preview"),
+                            target = preview_card:ref("preview"),
                             element_point = ui.attach.left_top,
                             parent_point = ui.attach.left_top,
                             width = ui.fixed(520),
@@ -496,8 +496,8 @@ local decl = ui.component("sdl_gl_demo") {
                 },
 
                 ui.tooltip {
-                    id = ui.stable("tooltip"),
-                    target = preview_card:float("preview"),
+                    key = ui.stable("tooltip"),
+                    target = preview_card:ref("preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,

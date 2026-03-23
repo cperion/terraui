@@ -206,32 +206,32 @@ do
         slots = {
             ui.widget_slot("children"),
         },
-        root = ui.column { id = ui.stable("root") } {
+        root = ui.column { key = ui.stable("root") } {
             ui.label { text = ui.prop_ref("title") },
             ui.slot("children"),
         },
     }
 
     local ok1, err1 = pcall(function()
-        ui.use(card) { id = ui.stable("c1") } {}
+        ui.use(card) { key = ui.stable("c1"), title = nil } {}
     end)
     assert(not ok1)
     assert(err1:match("missing required widget prop"))
 
     local ok2, err2 = pcall(function()
-        ui.use(card) { id = ui.stable("c2"), title = "Hi", bogus = true } {}
+        ui.use(card) { key = ui.stable("c2"), title = "Hi", bogus = true } {}
     end)
     assert(not ok2)
     assert(err2:match("unknown widget prop"))
 
     local ok_type, err_type = pcall(function()
-        ui.use(card) { id = ui.stable("c2b"), title = 42 } {}
+        ui.use(card) { key = ui.stable("c2b"), title = 42 } {}
     end)
     assert(not ok_type)
     assert(err_type:match("widget prop type mismatch"))
 
     local ok3, err3 = pcall(function()
-        ui.use(card) { id = ui.stable("c3"), title = "Hi" } {
+        ui.use(card) { key = ui.stable("c3"), title = "Hi" } {
             side = { ui.label { text = "X" } },
         }
     end)
@@ -240,32 +240,31 @@ do
 
     local card_scope = ui.scope("card1")
     local preview = card_scope:child("preview")
-    assert(preview:id().kind == "Stable")
-    assert(preview:id().name == "card1/preview")
+    assert(preview:key().kind == "Stable")
+    assert(preview:key().name == "card1/preview")
 
     local item_scope = ui.scope(ui.indexed("card", 3))
     local item_preview = item_scope:child("preview")
-    assert(item_preview:id().kind == "Indexed")
-    assert(item_preview:id().name == "card/preview")
+    assert(item_preview:key().kind == "Indexed")
+    assert(item_preview:key().name == "card/preview")
 
     local nested = card_scope:child("preview", "header")
-    assert(nested:id().kind == "Stable")
-    assert(nested:id().name == "card1/preview/header")
+    assert(nested:key().kind == "Stable")
+    assert(nested:key().name == "card1/preview/header")
 
-    local ft = card_scope:float("preview")
+    local ft = card_scope:ref("preview")
     assert(ft.kind == "FloatById")
     assert(ft.id.kind == "Stable")
     assert(ft.id.name == "card1/preview")
 
     local decl = ui.component("scope_ids") {
-        root = ui.column { id = card_scope } {
-            ui.label { id = preview, text = "Preview" },
+        root = ui.column { key = card_scope } {
+            ui.label { ref = "preview", text = "Preview" },
         },
     }
-    assert(decl.root.id.kind == "Stable")
-    assert(decl.root.id.name == "card1")
-    assert(decl.root.children[1].value.id.kind == "Stable")
-    assert(decl.root.children[1].value.id.name == "card1/preview")
+    local bound = terraui.bind(decl)
+    assert(bound.root.stable_id.base == "card1")
+    assert(bound.root.children[1].stable_id.base == "card1/preview")
 
     print("  test 6 (widget DSL validation + scope helpers): ok")
 end

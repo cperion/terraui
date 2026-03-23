@@ -18,7 +18,7 @@ local Section = ui.widget("Section") {
         ui.widget_slot("children"),
     },
     root = ui.column {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.fit(),
         gap = ui.state_ref("gap"),
@@ -26,8 +26,8 @@ local Section = ui.widget("Section") {
         background = rgba(0.11, 0.12, 0.14, 1),
         border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.24, 0.26, 0.30, 1) },
     } {
-        ui.row { id = ui.stable("header"), width = ui.grow(), height = ui.fit(), gap = 8 } {
-            ui.label { id = ui.stable("title"), text = ui.prop_ref("title"), font_size = 18 },
+        ui.row { ref = "header", width = ui.grow(), height = ui.fit(), gap = 8 } {
+            ui.label { text = ui.prop_ref("title"), font_size = 18 },
             ui.spacer { width = ui.grow(), height = ui.fixed(0) },
             ui.slot("toolbar"),
         },
@@ -44,15 +44,15 @@ local Split = ui.widget("Split") {
         ui.widget_slot("right"),
     },
     root = ui.row {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.grow(),
         gap = ui.state_ref("gap"),
     } {
-        ui.column { id = ui.stable("left_col"), width = ui.grow(), height = ui.grow(), gap = 8 } {
+        ui.column { key = ui.stable("left_col"), width = ui.grow(), height = ui.grow(), gap = 8 } {
             ui.slot("left"),
         },
-        ui.column { id = ui.stable("right_col"), width = ui.grow(), height = ui.grow(), gap = 8 } {
+        ui.column { key = ui.stable("right_col"), width = ui.grow(), height = ui.grow(), gap = 8 } {
             ui.slot("right"),
         },
     },
@@ -61,21 +61,19 @@ local Split = ui.widget("Split") {
 local workspace = ui.scope("workspace")
 local assets = workspace:child("assets")
 local preview = workspace:child("preview")
-local preview_image = preview:child("image")
 
 local decl = ui.component("widget_composition_example") {
     widgets = { Section, Split },
     root = ui.column {
-        id = ui.stable("root"),
         width = ui.fixed(640),
         height = ui.fixed(360),
         padding = 12,
         gap = 12,
         background = rgba(0.07, 0.08, 0.10, 1),
     } {
-        ui.use(Split) { id = workspace } {
+        ui.use(Split) { key = workspace } {
             left = {
-                ui.use(Section) { id = assets, title = "Assets" } {
+                ui.use(Section) { key = assets, title = "Assets" } {
                     toolbar = {
                         ui.button { text = "Import", action = "import" },
                     },
@@ -87,20 +85,20 @@ local decl = ui.component("widget_composition_example") {
                 },
             },
             right = {
-                ui.use(Section) { id = preview, title = "Preview" } {
+                ui.use(Section) { key = preview, title = "Preview" } {
                     toolbar = {
                         ui.button { text = "Refresh", action = "refresh" },
                     },
                     children = {
                         ui.image_view {
-                            id = preview_image,
+                            ref = "image",
                             image = "checker",
                             width = ui.fixed(280),
                             height = ui.fixed(180),
                         },
                         ui.tooltip {
-                            id = ui.stable("tip"),
-                            target = preview:float("image"),
+                            key = ui.stable("tip"),
+                            target = preview:ref("image"),
                             parent_point = ui.attach.right_top,
                             element_point = ui.attach.left_bottom,
                             offset_x = 8,
@@ -109,7 +107,20 @@ local decl = ui.component("widget_composition_example") {
                             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.55, 0.43, 0.12, 1) },
                             padding = 8,
                         } {
-                            ui.label { text = "Tooltip target resolved through preview:float(\"image\")", text_color = rgba(0.16, 0.13, 0.08, 1) },
+                            ui.label { text = "Tooltip target resolved through preview:ref(\"image\")", text_color = rgba(0.16, 0.13, 0.08, 1) },
+                        },
+                        ui.tooltip {
+                            key = ui.stable("header_tip"),
+                            target = preview:ref("header"),
+                            parent_point = ui.attach.right_bottom,
+                            element_point = ui.attach.left_top,
+                            offset_x = 8,
+                            offset_y = 6,
+                            background = rgba(0.76, 0.88, 0.98, 0.98),
+                            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.28, 0.44, 0.60, 1) },
+                            padding = 8,
+                        } {
+                            ui.label { text = "Section header targeted through preview:ref(\"header\")", text_color = rgba(0.10, 0.18, 0.26, 1) },
                         },
                     },
                 },

@@ -30,6 +30,7 @@ function BindCtx.new(opts)
         _next_node_id      = 0,
         _next_widget_id    = 0,
         _path_stack        = {},
+        _named_scopes      = {},
         _widget_frames     = {},
         _override_ids      = {},
         _renderer          = opts.renderer or "default",
@@ -191,6 +192,18 @@ function BindCtx:path_string()
     return table.concat(self._path_stack, "/")
 end
 
+function BindCtx:push_named_scope(id)
+    self._named_scopes[#self._named_scopes + 1] = id
+end
+
+function BindCtx:pop_named_scope()
+    self._named_scopes[#self._named_scopes] = nil
+end
+
+function BindCtx:current_named_scope()
+    return self._named_scopes[#self._named_scopes]
+end
+
 function BindCtx:resolve_intrinsic(fn_name, arity)
     return fn_name  -- v1: pass through
 end
@@ -199,14 +212,27 @@ end
 -- Id resolution helper (not a schema-declared method)
 ---------------------------------------------------------------------------
 
-local function widget_prefix(ctx)
-    local scope = ctx:widget_scope_string()
-    if scope == nil or scope == "" then return "" end
-    return scope .. "/"
-end
-
 local function is_explicit_path_name(name)
     return type(name) == "string" and name:find("/", 1, true) ~= nil
+end
+
+local function current_scope_id(ctx)
+    return ctx:current_named_scope()
+end
+
+local function scoped_base_and_salt(ctx, base, salt, is_indexed)
+    local scope = current_scope_id(ctx)
+    if scope == nil or is_explicit_path_name(base) then
+        return base, salt
+    end
+    base = scope.base .. "/" .. base
+    if is_indexed then
+        if scope.salt ~= 0 then
+            error("nested indexed ids inside indexed scopes are not supported without an explicit composed key: " .. base)
+        end
+        return base, salt
+    end
+    return base, scope.salt
 end
 
 local function resolve_id(decl_id, ctx, local_id, opts)
@@ -215,11 +241,11 @@ local function resolve_id(decl_id, ctx, local_id, opts)
         return Bound.ResolvedId(
             ctx:path_string() .. "/__auto_" .. local_id, 0)
     elseif decl_id.kind == "Stable" then
-        local base = decl_id.name
-        if not opts.suppress_widget_prefix and not is_explicit_path_name(base) then
-            base = widget_prefix(ctx) .. base
+        local base, salt = decl_id.name, 0
+        if not opts.suppress_scope_prefix then
+            base, salt = scoped_base_and_salt(ctx, base, salt, false)
         end
-        return Bound.ResolvedId(base, 0)
+        return Bound.ResolvedId(base, salt)
     elseif decl_id.kind == "Indexed" then
         local bound_idx = decl_id.index:bind(ctx)
         local salt = local_id
@@ -227,13 +253,21 @@ local function resolve_id(decl_id, ctx, local_id, opts)
             salt = bound_idx.v
         end
         local base = decl_id.name
-        if not opts.suppress_widget_prefix and not is_explicit_path_name(base) then
-            base = widget_prefix(ctx) .. base
+        if not opts.suppress_scope_prefix then
+            base, salt = scoped_base_and_salt(ctx, base, salt, true)
         end
         return Bound.ResolvedId(base, salt)
     else
         error("unknown Decl.Id kind: " .. tostring(decl_id.kind))
     end
+end
+
+local function scope_string_from_scope_id(scope)
+    if scope == nil then return nil end
+    if scope.salt ~= 0 then
+        return scope.base .. "/" .. tostring(scope.salt)
+    end
+    return scope.base
 end
 
 local function widget_scope_from_id(call, ctx)
@@ -250,12 +284,24 @@ local function widget_scope_from_id(call, ctx)
         if path ~= "" then return path .. "/" .. base end
         return base
     elseif call.id.kind == "Stable" then
+        local scope = current_scope_id(ctx)
+        if scope ~= nil and not is_explicit_path_name(call.id.name) then
+            return scope_string_from_scope_id(scope) .. "/" .. call.id.name
+        end
         return call.id.name
     elseif call.id.kind == "Indexed" then
         local bound_idx = call.id.index:bind(ctx)
         local salt = ctx:alloc_widget_id()
         if bound_idx.kind == "ConstNumber" then salt = bound_idx.v end
-        return call.id.name .. "/" .. tostring(salt)
+        local base = call.id.name
+        local scope = current_scope_id(ctx)
+        if scope ~= nil and not is_explicit_path_name(base) then
+            if scope.salt ~= 0 then
+                error("nested indexed widget keys inside indexed scopes are not supported without an explicit composed key: " .. base)
+            end
+            base = scope.base .. "/" .. base
+        end
+        return base .. "/" .. tostring(salt)
     else
         error("unknown WidgetCall id kind: " .. tostring(call.id.kind))
     end
@@ -732,11 +778,15 @@ end
 function Decl.Node:bind(ctx)
     local local_id = ctx:alloc_node_id()
     local override_id = ctx:take_override_id()
+    local id_mode = override_id ~= nil and "key" or rawget(self, "_terraui_id_mode") or "auto"
     local stable_id = resolve_id(override_id or self.id, ctx, local_id, {
-        suppress_widget_prefix = override_id ~= nil,
+        suppress_scope_prefix = override_id ~= nil,
     })
 
     ctx:push_path(stable_id.base)
+    if id_mode == "key" then
+        ctx:push_named_scope(stable_id)
+    end
 
     local visibility  = self.visibility:bind(ctx)
     local layout      = self.layout:bind(ctx)
@@ -749,6 +799,9 @@ function Decl.Node:bind(ctx)
     local leaf        = self.leaf and self.leaf:bind(ctx) or nil
     local children    = bind_children(ctx, self.children)
 
+    if id_mode == "key" then
+        ctx:pop_named_scope()
+    end
     ctx:pop_path()
 
     return Bound.Node(

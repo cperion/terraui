@@ -23,7 +23,8 @@ This repository currently contains:
   - `ui.slot(...)`
   - `ui.scope(...)`
   - `scope:child(...)`
-  - `scope:float(...)`
+  - `scope:ref(...)`
+  - public `key = ...` and `ref = ...` authoring
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`
@@ -94,7 +95,7 @@ local Card = ui.widget("Card") {
         ui.widget_slot("header"),
         ui.widget_slot("children"),
     },
-    root = ui.column { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+    root = ui.column { key = ui.stable("root"), gap = ui.state_ref("gap") } {
         ui.slot("header"),
         ui.slot("children"),
     },
@@ -104,13 +105,13 @@ local inspector = ui.scope("inspector")
 
 local decl = ui.component("demo") {
     widgets = { Card },
-    root = ui.column { id = ui.stable("root") } {
-        ui.use("Card") { id = inspector } {
+    root = ui.column {} {
+        ui.use("Card") { key = inspector } {
             header = {
                 ui.label { text = "Inspector" },
             },
             children = {
-                ui.label { id = inspector:child("body_label"), text = "Body" },
+                ui.label { ref = "body_label", text = "Body" },
             },
         },
     },
@@ -119,10 +120,12 @@ local decl = ui.component("demo") {
 
 Widget definitions live in `Decl`, but bind elaborates them back into canonical nodes and state slots before planning and compilation.
 
-For cross-widget targeting ergonomics, the DSL now centers on scope handles:
+For identity and targeting, the DSL now centers on:
+- `key = ...` for instance identity
+- `ref = ...` for local target names
 - `local card = ui.scope("card")`
-- `card:child("body")`
-- `card:float("body")`
+- `card:child("nested_instance")`
+- `card:ref("body")`
 
 A focused non-SDL example also lives at:
 

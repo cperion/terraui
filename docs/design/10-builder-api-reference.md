@@ -346,16 +346,18 @@ local preview = card:child("preview")
 ### Notes
 - `id` must be stable or indexed
 - scope handles are DSL-only values
-- scope handles are accepted anywhere a public `id` is accepted
+- scope handles are accepted anywhere a public `key` is accepted
 - `scope:child(name, ...)` returns another scope handle
-- `scope:float(name, ...)` returns `Decl.FloatById` for a child under that scope
+- `scope:ref(name, ...)` returns `Decl.FloatById` for a local target under that scope
 
 ## 5.7 `ui.use(name) { props } { children }`
 
 ### Form
 ```lua
-ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
-    ui.label { text = "Body" },
+local card = ui.scope("card1")
+
+ui.use("Card") { key = card, title = "Inspector" } {
+    ui.label { ref = "body", text = "Body" },
 }
 ```
 
@@ -368,7 +370,8 @@ ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
 - the second brace may be either:
   - an ordered child list for the conventional `children` slot
   - a keyed named-slot table such as `{ left = { ... }, right = { ... } }`
-- `props.id` is an optional widget-instance id override used during bind elaboration
+- `props.key` is the preferred widget-instance identity override
+- legacy `props.id` is still accepted internally, but public authoring now uses `key`
 
 ### Lowering
 Returns `Decl.WidgetCall`.
@@ -393,7 +396,7 @@ Leaf constructors consume one props record and return one `Decl.Node`.
 - `text`
 
 ### Common optional props
-- `id`
+- `key` or `ref` (mutually exclusive)
 - `color`
 - `font_id`
 - `font_size`
@@ -458,7 +461,7 @@ Returns one node with:
 - `image`
 
 ### Optional props
-- `id`
+- `key` or `ref` (mutually exclusive)
 - `fit`
 - `tint`
 - `aspect_ratio`
@@ -481,7 +484,7 @@ Returns one node with:
 ## 6.4 `ui.spacer { props }`
 
 ### Optional props
-- `id`
+- `key` or `ref` (mutually exclusive)
 - `width`
 - `height`
 

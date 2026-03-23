@@ -70,7 +70,7 @@ Used only on container-like combinators.
 #### Leaves / widgets
 ```lua
 ui.label  { text = "Hello" }
-ui.button { id = ui.stable("save"), text = "Save", action = "save" }
+ui.button { key = ui.scope("save"), text = "Save", action = "save" }
 ```
 
 #### Containers
@@ -183,30 +183,30 @@ local decl = ui.component("demo_inspector") {
     },
 
     root = ui.column {
-        id = ui.stable("root"),
+        key = ui.scope("root"),
         width = ui.grow(),
         height = ui.grow(),
         background = ui.rgba(0.07, 0.07, 0.09, 1.0),
         gap = 12,
     } {
         ui.row {
-            id = ui.stable("toolbar"),
+            key = ui.scope("toolbar"),
             height = ui.fixed(48),
             padding = ui.pad(12),
             gap = 10,
         } {
-            ui.label  { id = ui.stable("title"), text = ui.param_ref("title") },
-            ui.button { id = ui.stable("btn_save"),  text = "Save",  action = "save"  },
-            ui.button { id = ui.stable("btn_build"), text = "Build", action = "build" },
+            ui.label  { ref = "title", text = ui.param_ref("title") },
+            ui.button { ref = "btn_save",  text = "Save",  action = "save"  },
+            ui.button { ref = "btn_build", text = "Build", action = "build" },
         },
 
         ui.row {
-            id = ui.stable("body"),
+            key = ui.scope("body"),
             width = ui.grow(),
             height = ui.grow(),
         } {
             ui.scroll_region {
-                id = ui.stable("left_panel"),
+                key = ui.scope("left_panel"),
                 width = ui.fixed(260),
                 height = ui.grow(),
                 vertical = true,
@@ -214,7 +214,7 @@ local decl = ui.component("demo_inspector") {
             } {
                 ui.each({1,2,3}, function(i)
                     return ui.button {
-                        id = ui.indexed("asset_row", i),
+                        key = ui.indexed("asset_row", i),
                         text = "Asset " .. tostring(i),
                         action = "select_asset",
                     }
@@ -222,7 +222,7 @@ local decl = ui.component("demo_inspector") {
             },
 
             ui.column {
-                id = ui.stable("right_panel"),
+                key = ui.scope("right_panel"),
                 width = ui.grow(),
                 height = ui.grow(),
                 padding = ui.pad(16),
@@ -230,7 +230,7 @@ local decl = ui.component("demo_inspector") {
             } {
                 ui.label { text = "Preview" },
                 ui.image_view {
-                    id = ui.stable("preview"),
+                    ref = "preview",
                     image = ui.param_ref("preview_image"),
                     aspect_ratio = 16/9,
                     fit = ui.image_fit.contain,
@@ -302,13 +302,13 @@ local Split = ui.widget("Split") {
         ui.widget_slot("left"),
         ui.widget_slot("right"),
     },
-    root = ui.row { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+    root = ui.row { key = ui.stable("root"), gap = ui.state_ref("gap") } {
         ui.slot("left"),
         ui.slot("right"),
     },
 }
 
-ui.use("Split") { id = ui.stable("split1") } {
+ui.use("Split") { key = ui.scope("split1") } {
     left = {
         ui.label { text = "Layers" },
     },
@@ -328,10 +328,12 @@ Lowering notes:
 - widget prop values whose types depend on component params/state are checked during bind
 - `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
-- `ui.scope(id)` creates a DSL-only scope handle for a stable/indexed widget instance id
-- `scope:child("name", ...)` composes one or more nested local ids and returns another scope handle
-- `scope:float("name", ...)` builds `Decl.FloatById` for a child under that scope
-- scope handles are accepted anywhere an `id` is accepted in the public DSL
+- `ui.scope(id)` creates a DSL-only scope handle for a stable/indexed instance key
+- `scope:child("name", ...)` composes one or more nested instance keys and returns another scope handle
+- `scope:ref("name", ...)` builds `Decl.FloatById` for a local target under that scope
+- scope handles are accepted anywhere a public `key` is accepted in the DSL
+- node/widget `key = ...` expresses instance identity
+- node `ref = ...` expresses a local target name under the nearest keyed scope
 - `ui.state_ref(name)` inside a widget body resolves widget-local state first, then outer component state
 - the second brace on `ui.use(...)` may be either:
   - an ordered child list for the default `children` slot
@@ -418,17 +420,18 @@ Preferred public identity helpers:
 ```lua
 local card = ui.scope("card1")
 
-card
-card:child("header")
-card:float("header")
+ui.use(Card) { key = card } { ... }
+ui.label { ref = "header", text = "Header" }
+ui.tooltip { target = card:ref("header") } { ... }
 ```
 
 Raw string ids also work in the current implementation and lower to stable ids.
 
 Implementation note:
 - slash-qualified stable ids are treated as explicit paths during bind
-- `ui.scope(...)` is the preferred public helper for composing ids from a widget-instance id plus local child ids
+- `ui.scope(...)` is the preferred public helper for composing instance keys
 - scope handles are DSL-only sugar and lower back into ordinary `Decl.Id` / `Decl.FloatById`
+- bind propagates keyed scopes so local `ref = ...` names resolve under the nearest keyed ancestor or widget instance
 - that keeps cross-widget target references practical without requiring lower phases to know about widgets
 
 ## 14. Error behavior

@@ -222,6 +222,19 @@ local function normalized_local_id_name(v, label)
     error(label .. " must be a string or stable id")
 end
 
+local function normalize_ref_id(id)
+    if type(id) == "string" then
+        return Decl.Stable(normalized_local_id_name(id, "ref"))
+    elseif is_decl_id(id) then
+        if id.kind == "Stable" then
+            return Decl.Stable(normalized_local_id_name(id, "ref"))
+        elseif id.kind == "Indexed" then
+            return Decl.Indexed(normalized_local_id_name(id.name, "ref"), id.index)
+        end
+    end
+    error("invalid ref")
+end
+
 local function compose_scoped_id(base_id, ...)
     local parts = {}
     for i = 1, select("#", ...) do
@@ -311,10 +324,10 @@ local function validate_widget_props(def, props)
     if def == nil then return end
     local prop_defs = widget_fields(def)
     for k, v in pairs(props) do
-        if k ~= "id" and k ~= "slots" and prop_defs[k] == nil then
+        if k ~= "id" and k ~= "key" and k ~= "slots" and prop_defs[k] == nil then
             error("unknown widget prop in DSL for " .. def.name .. ": " .. tostring(k))
         end
-        if k ~= "id" and k ~= "slots" and prop_defs[k] ~= nil then
+        if k ~= "id" and k ~= "key" and k ~= "slots" and prop_defs[k] ~= nil then
             local expr = M.as_expr(v)
             local got = static_expr_type(expr)
             local expected = prop_defs[k].ty
@@ -382,8 +395,28 @@ end
 local function make_node(axis, props, leaf, children, defaults)
     props = props or {}
     defaults = defaults or {}
-    return Decl.Node(
-        normalize_id(props.id),
+    if props.key ~= nil and props.id ~= nil then
+        error("node cannot specify both key and legacy id")
+    end
+    if props.ref ~= nil and (props.key ~= nil or props.id ~= nil) then
+        error("node cannot specify both key and ref")
+    end
+
+    local id_mode = "auto"
+    local node_id = Decl.Auto
+    if props.ref ~= nil then
+        id_mode = "ref"
+        node_id = normalize_ref_id(props.ref)
+    elseif props.key ~= nil then
+        id_mode = "key"
+        node_id = normalize_id(props.key)
+    elseif props.id ~= nil then
+        id_mode = "key"
+        node_id = normalize_id(props.id)
+    end
+
+    local node = Decl.Node(
+        node_id,
         no_vis(props),
         Decl.Layout(
             axis,
@@ -400,6 +433,8 @@ local function make_node(axis, props, leaf, children, defaults)
         props.aspect_ratio and M.as_expr(props.aspect_ratio) or nil,
         leaf,
         normalize_children(children))
+    rawset(node, "_terraui_id_mode", id_mode)
+    return node
 end
 
 function M.dsl()
@@ -420,7 +455,7 @@ function M.dsl()
         }, Scope)
     end
 
-    function Scope:id()
+    function Scope:key()
         return self._id
     end
 
@@ -428,7 +463,7 @@ function M.dsl()
         return make_scope(compose_scoped_id(self, ...))
     end
 
-    function Scope:float(...)
+    function Scope:ref(...)
         return Decl.FloatById(compose_scoped_id(self, ...))
     end
 
@@ -588,6 +623,9 @@ function M.dsl()
         assert(type(name) == "string", "ui.use expects widget name or Decl.WidgetDef")
         return function(props)
             props = props or {}
+            if props.key ~= nil and props.id ~= nil then
+                error("widget call cannot specify both key and legacy id")
+            end
             validate_widget_props(def, props)
             return function(children)
                 local slot_args = normalize_slot_args(props, children, def)
@@ -595,13 +633,13 @@ function M.dsl()
                 local prop_args = List()
                 local prop_names = {}
                 for k, _ in pairs(props) do
-                    if k ~= "id" and k ~= "slots" then prop_names[#prop_names + 1] = k end
+                    if k ~= "id" and k ~= "key" and k ~= "slots" then prop_names[#prop_names + 1] = k end
                 end
                 table.sort(prop_names)
                 for _, k in ipairs(prop_names) do
                     prop_args:insert(Decl.PropArg(k, M.as_expr(props[k])))
                 end
-                return Decl.WidgetCall(props.id and normalize_id(props.id) or nil, name, prop_args, slot_args)
+                return Decl.WidgetCall((props.key or props.id) and normalize_id(props.key or props.id) or nil, name, prop_args, slot_args)
             end
         end
     end
