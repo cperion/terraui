@@ -577,9 +577,139 @@ local decl = ui.component("sdl_gl_demo") {
     },
 }
 
+struct Packet {
+    kind: int32
+    index: int32
+    z: float
+    seq: uint32
+}
+
+struct ScissorRect {
+    x: int32
+    y: int32
+    w: int32
+    h: int32
+}
+
+local TEXT_CACHE_CAP = 256
+local TEXT_KEY_CAP = 256
+local MEASURE_FONT_CACHE_CAP = 16
+
+struct TextCacheEntry {
+    used: bool
+    tex: uint32
+    w: int32
+    h: int32
+    key: int8[TEXT_KEY_CAP]
+}
+
+struct MeasureFontEntry {
+    used: bool
+    size10: int32
+    font: &C.TTF_Font
+}
+
+struct DemoApp {
+    window: &C.SDL_Window
+    glctx: C.SDL_GLContext
+    font: &C.TTF_Font
+    checker_tex: uint32
+    terrain_tex: uint32
+    water_tex: uint32
+    roads_tex: uint32
+    blueprint_tex: uint32
+    heatmap_tex: uint32
+
+    selected_tool: rawstring
+    selected_asset: rawstring
+    status_primary: rawstring
+    status_secondary: rawstring
+    hint_text: rawstring
+    preview_image: rawstring
+    preview_title: rawstring
+    detail_a: rawstring
+    detail_b: rawstring
+    footer_text: rawstring
+    mode_summary: rawstring
+    mode_line_1: rawstring
+    mode_line_2: rawstring
+    mode_line_3: rawstring
+    asset_meta_1: rawstring
+    asset_meta_2: rawstring
+    asset_meta_3: rawstring
+    event_1: rawstring
+    event_2: rawstring
+    event_3: rawstring
+    progress_a: float
+    progress_b: float
+    accent: compile.Color
+    tick: int32
+    text_cache_cursor: int32
+    text_cache: TextCacheEntry[TEXT_CACHE_CAP]
+}
+
+local measure_font_cache = terralib.global(MeasureFontEntry[MEASURE_FONT_CACHE_CAP])
+local measure_font_cache_cursor = terralib.global(int32, 0)
+
+local SDL_WINDOW_OPENGL = 0x0000000000000002ULL
+local SDL_WINDOW_HIDDEN = 0x0000000000000008ULL
+local SDL_WINDOW_RESIZABLE = 0x0000000000000020ULL
+local SDL_WINDOW_HIGH_PIXEL_DENSITY = 0x0000000000002000ULL
+local SDL_EVENT_QUIT = 0x100
+local SDL_EVENT_WINDOW_CLOSE_REQUESTED = 0x210
+local SDL_EVENT_MOUSE_MOTION = 0x400
+local SDL_EVENT_MOUSE_BUTTON_DOWN = 0x401
+local SDL_EVENT_MOUSE_BUTTON_UP = 0x402
+local SDL_EVENT_MOUSE_WHEEL = 0x403
+local SDL_BUTTON_LEFT = 1
+
+terra fetch_measure_font(font_size: float) : &C.TTF_Font
+    var size10 = [int32](font_size * 10.0f)
+    for i = 0, MEASURE_FONT_CACHE_CAP do
+        if measure_font_cache[i].used and measure_font_cache[i].size10 == size10 then
+            return measure_font_cache[i].font
+        end
+    end
+
+    var slot: int32 = -1
+    for i = 0, MEASURE_FONT_CACHE_CAP do
+        if not measure_font_cache[i].used then
+            slot = i
+            break
+        end
+    end
+    if slot < 0 then
+        slot = measure_font_cache_cursor % MEASURE_FONT_CACHE_CAP
+        if measure_font_cache[slot].used and measure_font_cache[slot].font ~= nil then
+            C.TTF_CloseFont(measure_font_cache[slot].font)
+        end
+    end
+
+    var font = C.TTF_OpenFont([font_path], font_size)
+    if font == nil then return nil end
+
+    measure_font_cache[slot].used = true
+    measure_font_cache[slot].size10 = size10
+    measure_font_cache[slot].font = font
+    measure_font_cache_cursor = (slot + 1) % MEASURE_FONT_CACHE_CAP
+    return font
+end
+
+terra clear_measure_font_cache()
+    for i = 0, MEASURE_FONT_CACHE_CAP do
+        if measure_font_cache[i].used and measure_font_cache[i].font ~= nil then
+            C.TTF_CloseFont(measure_font_cache[i].font)
+            measure_font_cache[i].font = nil
+        end
+        measure_font_cache[i].used = false
+        measure_font_cache[i].size10 = 0
+    end
+    measure_font_cache_cursor = 0
+end
+
 terra measure_demo_text_width(text: rawstring, font_size: float, align: int32) : float
     if text == nil then return 0 end
-    var font = C.TTF_OpenFont([font_path], font_size)
+    var font = fetch_measure_font(font_size)
     if font == nil then return 0 end
 
     if align == compile.TEXT_ALIGN_CENTER then
@@ -593,14 +723,13 @@ terra measure_demo_text_width(text: rawstring, font_size: float, align: int32) :
     var w: int32 = 0
     var h: int32 = 0
     var ok = C.TTF_GetStringSize(font, text, C.strlen(text), &w, &h)
-    C.TTF_CloseFont(font)
     if not ok then return 0 end
     return [float](w)
 end
 
 terra measure_demo_text_height_for_width(text: rawstring, font_size: float, wrap: int32, align: int32, max_width: float) : float
     if text == nil then return 0 end
-    var font = C.TTF_OpenFont([font_path], font_size)
+    var font = fetch_measure_font(font_size)
     if font == nil then return 0 end
 
     if align == compile.TEXT_ALIGN_CENTER then
@@ -624,7 +753,6 @@ terra measure_demo_text_height_for_width(text: rawstring, font_size: float, wrap
     else
         ok = C.TTF_GetStringSize(font, text, C.strlen(text), &w, &h)
     end
-    C.TTF_CloseFont(font)
     if not ok then return 0 end
     return [float](h)
 end
@@ -668,85 +796,8 @@ local max_packets = #planned.paints + #planned.texts + #planned.images + (#plann
 if max_packets < 1 then max_packets = 1 end
 local max_scissors = #planned.clips
 if max_scissors < 1 then max_scissors = 1 end
-
-struct Packet {
-    kind: int32
-    index: int32
-    z: float
-    seq: uint32
-}
-
-struct ScissorRect {
-    x: int32
-    y: int32
-    w: int32
-    h: int32
-}
-
-local TEXT_CACHE_CAP = 256
-local TEXT_KEY_CAP = 256
-
-struct TextCacheEntry {
-    used: bool
-    tex: uint32
-    w: int32
-    h: int32
-    key: int8[TEXT_KEY_CAP]
-}
-
-struct DemoApp {
-    window: &C.SDL_Window
-    glctx: C.SDL_GLContext
-    font: &C.TTF_Font
-    checker_tex: uint32
-    terrain_tex: uint32
-    water_tex: uint32
-    roads_tex: uint32
-    blueprint_tex: uint32
-    heatmap_tex: uint32
-
-    selected_tool: rawstring
-    selected_asset: rawstring
-    status_primary: rawstring
-    status_secondary: rawstring
-    hint_text: rawstring
-    preview_image: rawstring
-    preview_title: rawstring
-    detail_a: rawstring
-    detail_b: rawstring
-    footer_text: rawstring
-    mode_summary: rawstring
-    mode_line_1: rawstring
-    mode_line_2: rawstring
-    mode_line_3: rawstring
-    asset_meta_1: rawstring
-    asset_meta_2: rawstring
-    asset_meta_3: rawstring
-    event_1: rawstring
-    event_2: rawstring
-    event_3: rawstring
-    progress_a: float
-    progress_b: float
-    accent: compile.Color
-    tick: int32
-    text_cache_cursor: int32
-    text_cache: TextCacheEntry[TEXT_CACHE_CAP]
-}
-
 local PacketArrayT = Packet[max_packets]
 local ScissorArrayT = ScissorRect[max_scissors]
-
-local SDL_WINDOW_OPENGL = 0x0000000000000002ULL
-local SDL_WINDOW_HIDDEN = 0x0000000000000008ULL
-local SDL_WINDOW_RESIZABLE = 0x0000000000000020ULL
-local SDL_WINDOW_HIGH_PIXEL_DENSITY = 0x0000000000002000ULL
-local SDL_EVENT_QUIT = 0x100
-local SDL_EVENT_WINDOW_CLOSE_REQUESTED = 0x210
-local SDL_EVENT_MOUSE_MOTION = 0x400
-local SDL_EVENT_MOUSE_BUTTON_DOWN = 0x401
-local SDL_EVENT_MOUSE_BUTTON_UP = 0x402
-local SDL_EVENT_MOUSE_WHEEL = 0x403
-local SDL_BUTTON_LEFT = 1
 
 terra color(r: float, g: float, b: float, a: float) : compile.Color
     return compile.Color { r, g, b, a }
@@ -1355,6 +1406,7 @@ terra apply_asset_profile(app: &DemoApp, asset_name: rawstring)
 end
 
 terra app_init(app: &DemoApp, hidden: bool) : int
+    clear_measure_font_cache()
     if not C.SDL_Init(C.SDL_INIT_VIDEO) then return 1 end
     if not C.TTF_Init() then
         C.SDL_Quit()
@@ -1421,6 +1473,7 @@ terra app_shutdown(app: &DemoApp)
             C.glDeleteTextures(1, &app.text_cache[i].tex)
         end
     end
+    clear_measure_font_cache()
     if app.font ~= nil then C.TTF_CloseFont(app.font) end
     if app.glctx ~= nil then C.SDL_GL_DestroyContext(app.glctx) end
     if app.window ~= nil then C.SDL_DestroyWindow(app.window) end
