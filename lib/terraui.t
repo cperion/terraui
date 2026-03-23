@@ -9,6 +9,7 @@ local dsl = require("lib/dsl")
 local presenter = require("lib/presenter")
 local opengl_backend = require("lib/opengl_backend")
 local direct_c_backend = require("lib/direct_c_backend")
+local sdl_gl_backend = require("lib/sdl_gl_backend")
 
 local plan_registry = {}
 
@@ -25,6 +26,7 @@ M.dsl = dsl.dsl
 M.presenter = presenter
 M.opengl_backend = opengl_backend
 M.direct_c_backend = direct_c_backend
+M.sdl_gl_backend = sdl_gl_backend
 
 function M.bind(decl_component, opts)
     return bind.bind_component(decl_component, opts)

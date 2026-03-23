@@ -15,6 +15,8 @@ This repository currently contains:
   - `lib/compile.t`
   - `lib/dsl.t`
   - `lib/terraui.t`
+- a reusable SDL3 + OpenGL + SDL_ttf backend/session module for AOT demos in:
+  - `lib/sdl_gl_backend.t`
 - first-class `Decl`-level widget authoring with bind-time elaboration:
   - `ui.widget(...)`
   - `ui.widget_prop(...)`
@@ -29,6 +31,7 @@ This repository currently contains:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`
   - `lib/direct_c_backend.t`
+  - `lib/sdl_gl_backend.t`
 - an ahead-of-time SDL+OpenGL demo builder in `examples/build_sdl_gl_demo.t`
 - tests in `tests/`
 
