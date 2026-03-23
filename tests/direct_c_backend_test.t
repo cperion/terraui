@@ -63,7 +63,7 @@ end
 do
     local decl = ui.component("direct_batches") {
         root = ui.scroll_region {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(120),
             height = ui.fixed(80),
             horizontal = true,
@@ -109,7 +109,7 @@ end
 do
     local decl = ui.component("direct_payloads") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(100),
             height = ui.fixed(60),
             background = ui.rgba(0.2, 0.2, 0.2, 1),
@@ -148,7 +148,7 @@ end
 do
     local decl = ui.component("direct_scissor") {
         root = ui.scroll_region {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(50),
             height = ui.fixed(20),
             horizontal = true,

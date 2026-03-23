@@ -40,7 +40,7 @@ end
 do
     local decl = ui.component("batching") {
         root = ui.scroll_region {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(120),
             height = ui.fixed(80),
             horizontal = true,
@@ -89,7 +89,7 @@ end
 do
     local decl = ui.component("shape_hook") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(120),
             height = ui.fixed(80),
         } {
@@ -131,7 +131,7 @@ end
 do
     local decl = ui.component("custom_dispatch") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(50),
             height = ui.fixed(50),
         } {

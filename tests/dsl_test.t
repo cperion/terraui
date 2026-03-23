@@ -19,11 +19,11 @@ do
             ui.state("hovered") { type = ui.types.bool, initial = false },
         },
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             gap = 8,
         } {
-            ui.label { id = ui.stable("lbl"), text = ui.param_ref("title") },
-            ui.button { id = ui.stable("btn"), text = "Click", action = "go" },
+            ui.label { key = ui.stable("lbl"), text = ui.param_ref("title") },
+            ui.button { key = ui.stable("btn"), text = "Click", action = "go" },
         },
     }
 
@@ -46,7 +46,7 @@ end
 
 do
     local decl = ui.component("helpers") {
-        root = ui.row { id = ui.stable("root") } {
+        root = ui.row { key = ui.stable("root") } {
             ui.fragment {
                 ui.label { text = "A" },
                 ui.label { text = "B" },
@@ -54,7 +54,7 @@ do
             ui.when(true, ui.label { text = "C" }),
             ui.maybe(nil),
             ui.each({1,2}, function(x)
-                return ui.label { id = ui.indexed("n", x), text = tostring(x) }
+                return ui.label { key = ui.indexed("n", x), text = tostring(x) }
             end),
         },
     }
@@ -72,16 +72,16 @@ end
 
 do
     local decl = ui.component("specials") {
-        root = ui.column { id = ui.stable("root") } {
+        root = ui.column { key = ui.stable("root") } {
             ui.scroll_region {
-                id = ui.stable("scroll"),
+                key = ui.stable("scroll"),
                 vertical = true,
                 scroll_y = 12,
             } {
                 ui.label { text = "Inside" },
             },
             ui.tooltip {
-                id = ui.stable("tip"),
+                key = ui.stable("tip"),
                 target = ui.float.parent,
                 parent_point = ui.attach.right_bottom,
                 element_point = ui.attach.left_top,
@@ -113,16 +113,16 @@ do
         slots = {
             ui.widget_slot("children"),
         },
-        root = ui.column { id = ui.stable("root") } {
-            ui.label { id = ui.stable("title"), text = ui.prop_ref("title") },
+        root = ui.column { key = ui.stable("root") } {
+            ui.label { key = ui.stable("title"), text = ui.prop_ref("title") },
             ui.slot("children"),
         },
     }
 
     local decl = ui.component("widget_dsl") {
         widgets = { card },
-        root = ui.column { id = ui.stable("root") } {
-            ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
+        root = ui.column { key = ui.stable("root") } {
+            ui.use("Card") { key = ui.stable("card1"), title = "Inspector" } {
                 ui.label { text = "Body" },
             },
         },
@@ -151,7 +151,7 @@ do
             ui.widget_slot("left"),
             ui.widget_slot("right"),
         },
-        root = ui.row { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+        root = ui.row { key = ui.stable("root"), gap = ui.state_ref("gap") } {
             ui.slot("left"),
             ui.slot("right"),
         },
@@ -159,8 +159,8 @@ do
 
     local decl = ui.component("named_slots") {
         widgets = { split },
-        root = ui.column { id = ui.stable("root") } {
-            ui.use("Split") { id = ui.stable("split1") } {
+        root = ui.column { key = ui.stable("root") } {
+            ui.use("Split") { key = ui.stable("split1") } {
                 left = {
                     ui.label { text = "L" },
                 },
@@ -276,7 +276,7 @@ end
 do
     local decl = ui.component("compile_demo") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(100),
             height = ui.fixed(50),
             background = ui.rgba(0.2, 0.3, 0.4, 1),

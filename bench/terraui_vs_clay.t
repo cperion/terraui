@@ -34,7 +34,7 @@ local function make_flat_list_decl(name, item_count)
     local children = {}
     for i = 0, item_count - 1 do
         children[#children + 1] = ui.row {
-            id = ui.indexed("row", i),
+            key = ui.indexed("row", i),
             width = ui.grow(),
             height = ui.fit(),
             padding = 6,
@@ -59,7 +59,7 @@ local function make_flat_list_decl(name, item_count)
 
     return ui.component(name) {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.grow(),
             height = ui.grow(),
             padding = 8,
@@ -73,7 +73,7 @@ local function make_text_heavy_decl(name, item_count)
     local children = {}
     for i = 0, item_count - 1 do
         children[#children + 1] = ui.row {
-            id = ui.indexed("textrow", i),
+            key = ui.indexed("textrow", i),
             width = ui.grow(),
             height = ui.fit(),
             padding = 4,
@@ -83,7 +83,7 @@ local function make_text_heavy_decl(name, item_count)
     end
     return ui.component(name) {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.grow(),
             height = ui.grow(),
             padding = 10,
@@ -99,7 +99,7 @@ local function make_nested_panels_decl(name, group_count)
         local cards = {}
         for i = 0, 5 do
             cards[#cards + 1] = ui.column {
-                id = ui.indexed("card", g * 16 + i),
+                key = ui.indexed("card", g * 16 + i),
                 width = ui.grow(),
                 height = ui.fit(),
                 padding = 6,
@@ -112,7 +112,7 @@ local function make_nested_panels_decl(name, group_count)
             }
         end
         groups[#groups + 1] = ui.column {
-            id = ui.indexed("group", g),
+            key = ui.indexed("group", g),
             width = ui.grow(),
             height = ui.grow(),
             padding = 8,
@@ -123,7 +123,7 @@ local function make_nested_panels_decl(name, group_count)
     end
     return ui.component(name) {
         root = ui.row {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.grow(),
             height = ui.grow(),
             padding = 8,
@@ -137,7 +137,7 @@ local function make_inspector_decl(name, item_count)
     local toolbar = {}
     for i = 0, 2 do
         toolbar[#toolbar + 1] = ui.column {
-            id = ui.indexed("tab", i),
+            key = ui.indexed("tab", i),
             padding = 6,
             width = ui.fit(),
             height = ui.fit(),
@@ -151,7 +151,7 @@ local function make_inspector_decl(name, item_count)
     local assets = { label("Assets", { font_size = 18, text_color = rgba(0.96, 0.97, 0.98, 1) }) }
     for i = 0, item_count - 1 do
         assets[#assets + 1] = ui.column {
-            id = ui.indexed("asset", i),
+            key = ui.indexed("asset", i),
             width = ui.grow(),
             height = ui.fit(),
             padding = 5,
@@ -181,7 +181,7 @@ local function make_inspector_decl(name, item_count)
 
     return ui.component(name) {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.grow(),
             height = ui.grow(),
             padding = 10,
@@ -189,7 +189,7 @@ local function make_inspector_decl(name, item_count)
             background = rgba(0.08, 0.09, 0.11, 1),
         } {
             ui.row {
-                id = ui.stable("toolbar"),
+                key = ui.stable("toolbar"),
                 width = ui.grow(),
                 height = ui.fixed(40),
                 padding = 6,
@@ -199,13 +199,13 @@ local function make_inspector_decl(name, item_count)
                 border = ui.border { bottom = 1, color = rgba(0.22, 0.24, 0.28, 1) },
             } (toolbar),
             ui.row {
-                id = ui.stable("main"),
+                key = ui.stable("main"),
                 width = ui.grow(),
                 height = ui.grow(),
                 gap = 10,
             } {
                 ui.column {
-                    id = ui.stable("assets"),
+                    key = ui.stable("assets"),
                     width = ui.fixed(260),
                     height = ui.grow(),
                     padding = 8,
@@ -214,21 +214,21 @@ local function make_inspector_decl(name, item_count)
                     border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.22, 0.24, 0.28, 1) },
                 } (assets),
                 ui.column {
-                    id = ui.stable("center"),
+                    key = ui.stable("center"),
                     width = ui.grow(),
                     height = ui.grow(),
                     gap = 8,
                 } {
                     label("Preview", { font_size = 20, text_color = rgba(0.96, 0.97, 0.98, 1) }),
                     ui.image_view {
-                        id = ui.stable("image"),
+                        key = ui.stable("image"),
                         image = "bench_image",
                         width = ui.fixed(320),
                         height = ui.fixed(180),
                         border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.26, 0.28, 0.33, 1) },
                     },
                     ui.column {
-                        id = ui.stable("stats"),
+                        key = ui.stable("stats"),
                         width = ui.grow(),
                         height = ui.fit(),
                         padding = 8,
@@ -238,7 +238,7 @@ local function make_inspector_decl(name, item_count)
                     } (stats),
                 },
                 ui.column {
-                    id = ui.stable("inspector"),
+                    key = ui.stable("inspector"),
                     width = ui.fixed(240),
                     height = ui.grow(),
                     padding = 8,

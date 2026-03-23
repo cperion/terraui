@@ -324,10 +324,10 @@ local function validate_widget_props(def, props)
     if def == nil then return end
     local prop_defs = widget_fields(def)
     for k, v in pairs(props) do
-        if k ~= "id" and k ~= "key" and k ~= "slots" and prop_defs[k] == nil then
+        if k ~= "key" and k ~= "slots" and prop_defs[k] == nil then
             error("unknown widget prop in DSL for " .. def.name .. ": " .. tostring(k))
         end
-        if k ~= "id" and k ~= "key" and k ~= "slots" and prop_defs[k] ~= nil then
+        if k ~= "key" and k ~= "slots" and prop_defs[k] ~= nil then
             local expr = M.as_expr(v)
             local got = static_expr_type(expr)
             local expected = prop_defs[k].ty
@@ -395,10 +395,7 @@ end
 local function make_node(axis, props, leaf, children, defaults)
     props = props or {}
     defaults = defaults or {}
-    if props.key ~= nil and props.id ~= nil then
-        error("node cannot specify both key and legacy id")
-    end
-    if props.ref ~= nil and (props.key ~= nil or props.id ~= nil) then
+    if props.ref ~= nil and props.key ~= nil then
         error("node cannot specify both key and ref")
     end
 
@@ -410,9 +407,6 @@ local function make_node(axis, props, leaf, children, defaults)
     elseif props.key ~= nil then
         id_mode = "key"
         node_id = normalize_id(props.key)
-    elseif props.id ~= nil then
-        id_mode = "key"
-        node_id = normalize_id(props.id)
     end
 
     local node = Decl.Node(
@@ -623,9 +617,6 @@ function M.dsl()
         assert(type(name) == "string", "ui.use expects widget name or Decl.WidgetDef")
         return function(props)
             props = props or {}
-            if props.key ~= nil and props.id ~= nil then
-                error("widget call cannot specify both key and legacy id")
-            end
             validate_widget_props(def, props)
             return function(children)
                 local slot_args = normalize_slot_args(props, children, def)
@@ -633,13 +624,13 @@ function M.dsl()
                 local prop_args = List()
                 local prop_names = {}
                 for k, _ in pairs(props) do
-                    if k ~= "id" and k ~= "key" and k ~= "slots" then prop_names[#prop_names + 1] = k end
+                    if k ~= "key" and k ~= "slots" then prop_names[#prop_names + 1] = k end
                 end
                 table.sort(prop_names)
                 for _, k in ipairs(prop_names) do
                     prop_args:insert(Decl.PropArg(k, M.as_expr(props[k])))
                 end
-                return Decl.WidgetCall((props.key or props.id) and normalize_id(props.key or props.id) or nil, name, prop_args, slot_args)
+                return Decl.WidgetCall(props.key and normalize_id(props.key) or nil, name, prop_args, slot_args)
             end
         end
     end

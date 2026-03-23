@@ -28,14 +28,14 @@ end
 do
     local decl = ui.component("packets") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(100),
             height = ui.fixed(100),
             background = ui.rgba(0.2, 0.2, 0.2, 1),
         } {
-            ui.label { id = ui.stable("label"), text = "Hello" },
+            ui.label { key = ui.stable("label"), text = "Hello" },
             ui.tooltip {
-                id = ui.stable("tip"),
+                key = ui.stable("tip"),
                 target = ui.float.parent,
                 parent_point = ui.attach.left_top,
                 element_point = ui.attach.left_top,
@@ -71,7 +71,7 @@ end
 do
     local decl = ui.component("scissor_replay") {
         root = ui.scroll_region {
-            id = ui.stable("scroll"),
+            key = ui.stable("scroll"),
             width = ui.fixed(100),
             height = ui.fixed(50),
             horizontal = true,
@@ -112,7 +112,7 @@ end
 do
     local decl = ui.component("payloads") {
         root = ui.column {
-            id = ui.stable("root"),
+            key = ui.stable("root"),
             width = ui.fixed(120),
             height = ui.fixed(90),
             background = ui.rgba(0.3, 0.4, 0.5, 1),

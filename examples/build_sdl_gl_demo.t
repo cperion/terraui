@@ -133,18 +133,18 @@ local HeaderBadge = ui.widget("HeaderBadge") {
         ui.widget_prop("accent") { type = ui.types.color },
     },
     root = ui.row {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.fit(),
         gap = 10,
         align_y = ui.align_y.center,
     } {
-        ui.column { id = ui.stable("text"), width = ui.grow(), height = ui.fit(), gap = 2 } {
+        ui.column { key = ui.stable("text"), width = ui.grow(), height = ui.fit(), gap = 2 } {
             label(ui.prop_ref("title"), { font_size = 24 }),
             label(ui.prop_ref("subtitle"), { font_size = 14, text_color = ui.prop_ref("accent") }),
         },
         ui.column {
-            id = ui.stable("swatch"),
+            key = ui.stable("swatch"),
             width = ui.fixed(18),
             height = ui.fixed(18),
             background = ui.prop_ref("accent"),
@@ -162,7 +162,7 @@ local InfoRowWidget = ui.widget("InfoRow") {
         ui.widget_prop("rhs") { type = ui.types.string },
     },
     root = ui.row {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.fit(),
         gap = ui.state_ref("gap"),
@@ -183,21 +183,21 @@ local ProgressMeterWidget = ui.widget("ProgressMeter") {
         ui.widget_prop("fill") { type = ui.types.color },
     },
     root = ui.column {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.fit(),
         height = ui.fit(),
         gap = ui.state_ref("gap"),
     } {
         label(ui.prop_ref("title"), { font_size = 13, text_color = rgba(0.70, 0.74, 0.80, 1) }),
         ui.column {
-            id = ui.stable("track"),
+            key = ui.stable("track"),
             width = ui.fixed(220),
             height = ui.fixed(14),
             background = rgba(0.14, 0.16, 0.20, 1),
             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.26, 0.28, 0.33, 1) },
         } {
             ui.spacer {
-                id = ui.stable("fill"),
+                key = ui.stable("fill"),
                 width = ui.fixed(ui.prop_ref("bar_width")),
                 height = ui.fixed(14),
                 background = ui.prop_ref("fill"),
@@ -215,7 +215,7 @@ local ToolbarBar = ui.widget("ToolbarBar") {
         ui.widget_slot("trailing"),
     },
     root = ui.row {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         height = ui.fixed(52),
         padding = { left = 14, top = 8, right = 14, bottom = 8 },
         gap = ui.state_ref("gap"),
@@ -239,18 +239,18 @@ local PreviewCard = ui.widget("PreviewCard") {
         ui.widget_slot("meters"),
     },
     root = ui.column(panel {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.fit(),
         height = ui.fit(),
         gap = ui.state_ref("gap"),
     }) {
         ui.slot("media"),
-        ui.row { id = ui.stable("bottom"), width = ui.grow(), height = ui.fit(), gap = 16 } {
-            ui.column { id = ui.stable("meta_col"), width = ui.fit(), height = ui.fit(), gap = 6 } {
+        ui.row { key = ui.stable("bottom"), width = ui.grow(), height = ui.fit(), gap = 16 } {
+            ui.column { key = ui.stable("meta_col"), width = ui.fit(), height = ui.fit(), gap = 6 } {
                 ui.slot("meta"),
             },
             ui.spacer { width = ui.grow(), height = ui.fixed(0) },
-            ui.column { id = ui.stable("meter_col"), width = ui.fit(), height = ui.fit(), gap = 8 } {
+            ui.column { key = ui.stable("meter_col"), width = ui.fit(), height = ui.fit(), gap = 8 } {
                 ui.slot("meters"),
             },
         },
@@ -266,13 +266,13 @@ local ActivityStrip = ui.widget("ActivityStrip") {
         ui.widget_slot("chart"),
     },
     root = ui.row(panel {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.fit(),
         gap = ui.state_ref("gap"),
         align_y = ui.align_y.center,
     }) {
-        ui.column { id = ui.stable("log_col"), width = ui.grow(), height = ui.fit(), gap = 4 } {
+        ui.column { key = ui.stable("log_col"), width = ui.grow(), height = ui.fit(), gap = 4 } {
             ui.slot("log"),
         },
         ui.slot("chart"),
@@ -291,7 +291,7 @@ local InspectorPanel = ui.widget("InspectorPanel") {
         ui.widget_slot("chart"),
     },
     root = ui.column(panel {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.fixed(320),
         height = ui.grow(),
         gap = ui.state_ref("gap"),
@@ -313,7 +313,7 @@ local FooterBar = ui.widget("FooterBar") {
         ui.widget_slot("right"),
     },
     root = ui.row {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.fixed(34),
         padding = { left = 14, top = 8, right = 14, bottom = 8 },
@@ -337,14 +337,14 @@ local Shell = ui.widget("Shell") {
         ui.widget_slot("footer"),
     },
     root = ui.column {
-        id = ui.stable("root"),
+        key = ui.stable("root"),
         width = ui.grow(),
         height = ui.grow(),
         background = rgba(0.07, 0.08, 0.10, 1),
     } {
         ui.slot("toolbar"),
         ui.row {
-            id = ui.stable("main"),
+            key = ui.stable("main"),
             width = ui.grow(),
             height = ui.grow(),
             gap = 12,
@@ -388,13 +388,13 @@ local decl = ui.component("sdl_gl_demo") {
         Shell,
     },
     root = ui.column {
-        id = ui.stable("root_mount"),
+        key = ui.stable("root_mount"),
         width = ui.grow(),
         height = ui.grow(),
     } {
         ui.use(Shell) { key = app } {
         toolbar = {
-            ui.use(ToolbarBar) { id = ui.stable("toolbar") } {
+            ui.use(ToolbarBar) { key = ui.stable("toolbar") } {
                 primary = {
                     button("Inspect", "tool:inspect"),
                     button("Paint",   "tool:paint",   { background = rgba(0.54, 0.28, 0.18, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.78, 0.48, 0.32, 1) } }),
@@ -411,7 +411,7 @@ local decl = ui.component("sdl_gl_demo") {
         },
         assets = {
             ui.scroll_region(panel {
-                id = ui.stable("assets"),
+                key = ui.stable("assets"),
                 width = ui.fixed(250),
                 height = ui.grow(),
                 vertical = true,
@@ -420,13 +420,13 @@ local decl = ui.component("sdl_gl_demo") {
         },
         center = {
             ui.column {
-                id = ui.stable("center"),
+                key = ui.stable("center"),
                 width = ui.grow(),
                 height = ui.grow(),
                 gap = 12,
             } {
                 ui.use(HeaderBadge) {
-                    id = ui.stable("preview_header"),
+                    key = ui.stable("preview_header"),
                     title = ui.param_ref("preview_title"),
                     subtitle = ui.param_ref("selected_asset"),
                     accent = ui.param_ref("accent"),
@@ -456,18 +456,18 @@ local decl = ui.component("sdl_gl_demo") {
                         },
                     },
                     meta = {
-                        ui.use(InfoRowWidget) { id = ui.stable("tool_row"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
-                        ui.use(InfoRowWidget) { id = ui.stable("selection_row"), lhs = "Selection", rhs = ui.param_ref("selected_asset") } {},
-                        ui.use(InfoRowWidget) { id = ui.stable("mode_row"), lhs = "Mode", rhs = ui.param_ref("mode_summary") } {},
-                        ui.use(InfoRowWidget) { id = ui.stable("state_row"), lhs = "State", rhs = ui.param_ref("detail_b") } {},
+                        ui.use(InfoRowWidget) { key = ui.stable("tool_row"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                        ui.use(InfoRowWidget) { key = ui.stable("selection_row"), lhs = "Selection", rhs = ui.param_ref("selected_asset") } {},
+                        ui.use(InfoRowWidget) { key = ui.stable("mode_row"), lhs = "Mode", rhs = ui.param_ref("mode_summary") } {},
+                        ui.use(InfoRowWidget) { key = ui.stable("state_row"), lhs = "State", rhs = ui.param_ref("detail_b") } {},
                     },
                     meters = {
-                        ui.use(ProgressMeterWidget) { id = ui.stable("coverage_meter"), title = "Coverage", bar_width = ui.param_ref("progress_a"), fill = ui.param_ref("accent") } {},
-                        ui.use(ProgressMeterWidget) { id = ui.stable("bake_meter"), title = "Bake completion", bar_width = ui.param_ref("progress_b"), fill = ui.param_ref("accent") } {},
+                        ui.use(ProgressMeterWidget) { key = ui.stable("coverage_meter"), title = "Coverage", bar_width = ui.param_ref("progress_a"), fill = ui.param_ref("accent") } {},
+                        ui.use(ProgressMeterWidget) { key = ui.stable("bake_meter"), title = "Bake completion", bar_width = ui.param_ref("progress_b"), fill = ui.param_ref("accent") } {},
                     },
                 },
 
-                ui.use(ActivityStrip) { id = ui.stable("activity") } {
+                ui.use(ActivityStrip) { key = ui.stable("activity") } {
                     log = {
                         label(ui.param_ref("status_primary"), { font_size = 16 }),
                         label(ui.param_ref("event_1"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
@@ -476,7 +476,7 @@ local decl = ui.component("sdl_gl_demo") {
                     },
                     chart = {
                         ui.custom {
-                            id = ui.stable("timeline_wave"),
+                            key = ui.stable("timeline_wave"),
                             kind = "timeline_wave",
                             width = ui.fixed(240),
                             height = ui.fixed(88),
@@ -485,7 +485,7 @@ local decl = ui.component("sdl_gl_demo") {
                 },
 
                 ui.row(panel {
-                    id = ui.stable("status_strip"),
+                    key = ui.stable("status_strip"),
                     width = ui.grow(),
                     height = ui.fit(),
                     gap = 18,
@@ -515,15 +515,15 @@ local decl = ui.component("sdl_gl_demo") {
             },
         },
         inspector = {
-            ui.use(InspectorPanel) { id = ui.stable("inspector") } {
+            ui.use(InspectorPanel) { key = ui.stable("inspector") } {
                 summary = {
                     label("Inspector", { font_size = 21 }),
                     label("Selection", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                    ui.use(InfoRowWidget) { id = ui.stable("asset_info"), lhs = "Asset", rhs = ui.param_ref("selected_asset") } {},
-                    ui.use(InfoRowWidget) { id = ui.stable("tool_info"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
-                    ui.use(InfoRowWidget) { id = ui.stable("target_info"), lhs = "Target", rhs = ui.param_ref("preview_title") } {},
+                    ui.use(InfoRowWidget) { key = ui.stable("asset_info"), lhs = "Asset", rhs = ui.param_ref("selected_asset") } {},
+                    ui.use(InfoRowWidget) { key = ui.stable("tool_info"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                    ui.use(InfoRowWidget) { key = ui.stable("target_info"), lhs = "Target", rhs = ui.param_ref("preview_title") } {},
                     ui.custom {
-                        id = ui.stable("accent_swatches"),
+                        key = ui.stable("accent_swatches"),
                         kind = "accent_swatches",
                         width = ui.fixed(280),
                         height = ui.fixed(44),
@@ -550,7 +550,7 @@ local decl = ui.component("sdl_gl_demo") {
                 },
                 chart = {
                     ui.custom {
-                        id = ui.stable("inspector_chart"),
+                        key = ui.stable("inspector_chart"),
                         kind = "inspector_chart",
                         width = ui.fixed(280),
                         height = ui.fixed(96),
@@ -559,7 +559,7 @@ local decl = ui.component("sdl_gl_demo") {
             },
         },
         footer = {
-            ui.use(FooterBar) { id = ui.stable("footer") } {
+            ui.use(FooterBar) { key = ui.stable("footer") } {
                 left = {
                     label(ui.param_ref("footer_text"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
                 },

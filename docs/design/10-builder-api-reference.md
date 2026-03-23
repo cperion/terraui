@@ -370,8 +370,7 @@ ui.use("Card") { key = card, title = "Inspector" } {
 - the second brace may be either:
   - an ordered child list for the conventional `children` slot
   - a keyed named-slot table such as `{ left = { ... }, right = { ... } }`
-- `props.key` is the preferred widget-instance identity override
-- legacy `props.id` is still accepted internally, but public authoring now uses `key`
+- `props.key` is the widget-instance identity override
 
 ### Lowering
 Returns `Decl.WidgetCall`.

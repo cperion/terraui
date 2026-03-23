@@ -428,8 +428,7 @@ ui.tooltip { target = card:ref("header") } { ... }
 Raw string ids also work in the current implementation and lower to stable ids.
 
 Implementation note:
-- slash-qualified stable ids are treated as explicit paths during bind
-- `ui.scope(...)` is the preferred public helper for composing instance keys
+- `ui.scope(...)` is the public helper for composing instance keys
 - scope handles are DSL-only sugar and lower back into ordinary `Decl.Id` / `Decl.FloatById`
 - bind propagates keyed scopes so local `ref = ...` names resolve under the nearest keyed ancestor or widget instance
 - that keeps cross-widget target references practical without requiring lower phases to know about widgets
