@@ -195,7 +195,7 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 6: widget DSL validates props/slots early and exposes path helpers
+-- Test 6: widget DSL validates props/slots early and exposes scope helpers
 ---------------------------------------------------------------------------
 
 do
@@ -238,60 +238,36 @@ do
     assert(not ok3)
     assert(err3:match("unknown widget slot"))
 
-    local anchored = ui.widget("AnchoredCard") {
-        anchors = {
-            ui.widget_anchor("header"),
-        },
-        root = ui.column { id = ui.stable("root") } {
-            ui.label { id = ui.stable("header"), text = "Header" },
-        },
-    }
+    local card_scope = ui.scope("card1")
+    local preview = card_scope:child("preview")
+    assert(preview:id().kind == "Stable")
+    assert(preview:id().name == "card1/preview")
 
-    local ok_bad_anchor, err_bad_anchor = pcall(function()
-        ui.widget("BadAnchor") {
-            anchors = {
-                ui.widget_anchor("missing"),
-            },
-            root = ui.column { id = ui.stable("root") } {},
-        }
-    end)
-    assert(not ok_bad_anchor)
-    assert(err_bad_anchor:match("unknown widget anchor target"))
+    local item_scope = ui.scope(ui.indexed("card", 3))
+    local item_preview = item_scope:child("preview")
+    assert(item_preview:id().kind == "Indexed")
+    assert(item_preview:id().name == "card/preview")
 
-    local pid = ui.path_id("card1", "preview")
-    assert(pid.kind == "Stable")
-    assert(pid.name == "card1/preview")
+    local nested = card_scope:child("preview", "header")
+    assert(nested:id().kind == "Stable")
+    assert(nested:id().name == "card1/preview/header")
 
-    local sid = ui.scoped_id(ui.indexed("card", 3), "preview")
-    assert(sid.kind == "Indexed")
-    assert(sid.name == "card/preview")
-
-    local ft = ui.float.path("card1", "preview")
+    local ft = card_scope:float("preview")
     assert(ft.kind == "FloatById")
     assert(ft.id.kind == "Stable")
     assert(ft.id.name == "card1/preview")
 
-    local fs = ui.float.scoped(ui.stable("card1"), "preview")
-    assert(fs.kind == "FloatById")
-    assert(fs.id.kind == "Stable")
-    assert(fs.id.name == "card1/preview")
+    local decl = ui.component("scope_ids") {
+        root = ui.column { id = card_scope } {
+            ui.label { id = preview, text = "Preview" },
+        },
+    }
+    assert(decl.root.id.kind == "Stable")
+    assert(decl.root.id.name == "card1")
+    assert(decl.root.children[1].value.id.kind == "Stable")
+    assert(decl.root.children[1].value.id.name == "card1/preview")
 
-    local aid = ui.anchor_id(anchored, ui.stable("anchored1"), "header")
-    assert(aid.kind == "Stable")
-    assert(aid.name == "anchored1/header")
-
-    local fa = ui.float.anchor(anchored, ui.stable("anchored1"), "header")
-    assert(fa.kind == "FloatById")
-    assert(fa.id.kind == "Stable")
-    assert(fa.id.name == "anchored1/header")
-
-    local ok_anchor, err_anchor = pcall(function()
-        ui.anchor_id(anchored, ui.stable("anchored1"), "missing")
-    end)
-    assert(not ok_anchor)
-    assert(err_anchor:match("unknown widget anchor"))
-
-    print("  test 6 (widget DSL validation + path helpers): ok")
+    print("  test 6 (widget DSL validation + scope helpers): ok")
 end
 
 ---------------------------------------------------------------------------

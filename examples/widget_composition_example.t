@@ -13,9 +13,6 @@ local Section = ui.widget("Section") {
     props = {
         ui.widget_prop("title") { type = ui.types.string },
     },
-    anchors = {
-        ui.widget_anchor("header"),
-    },
     slots = {
         ui.widget_slot("toolbar"),
         ui.widget_slot("children"),
@@ -61,6 +58,11 @@ local Split = ui.widget("Split") {
     },
 }
 
+local workspace = ui.scope("workspace")
+local assets = workspace:child("assets")
+local preview = workspace:child("preview")
+local preview_image = preview:child("image")
+
 local decl = ui.component("widget_composition_example") {
     widgets = { Section, Split },
     root = ui.column {
@@ -71,9 +73,9 @@ local decl = ui.component("widget_composition_example") {
         gap = 12,
         background = rgba(0.07, 0.08, 0.10, 1),
     } {
-        ui.use(Split) { id = ui.stable("workspace") } {
+        ui.use(Split) { id = workspace } {
             left = {
-                ui.use(Section) { id = ui.stable("assets"), title = "Assets" } {
+                ui.use(Section) { id = assets, title = "Assets" } {
                     toolbar = {
                         ui.button { text = "Import", action = "import" },
                     },
@@ -85,20 +87,20 @@ local decl = ui.component("widget_composition_example") {
                 },
             },
             right = {
-                ui.use(Section) { id = ui.stable("preview"), title = "Preview" } {
+                ui.use(Section) { id = preview, title = "Preview" } {
                     toolbar = {
                         ui.button { text = "Refresh", action = "refresh" },
                     },
                     children = {
                         ui.image_view {
-                            id = ui.stable("image"),
+                            id = preview_image,
                             image = "checker",
                             width = ui.fixed(280),
                             height = ui.fixed(180),
                         },
                         ui.tooltip {
                             id = ui.stable("tip"),
-                            target = ui.float.scoped(ui.stable("preview"), "image"),
+                            target = preview:float("image"),
                             parent_point = ui.attach.right_top,
                             element_point = ui.attach.left_bottom,
                             offset_x = 8,
@@ -107,20 +109,7 @@ local decl = ui.component("widget_composition_example") {
                             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.55, 0.43, 0.12, 1) },
                             padding = 8,
                         } {
-                            ui.label { text = "Tooltip target resolved through ui.float.scoped", text_color = rgba(0.16, 0.13, 0.08, 1) },
-                        },
-                        ui.tooltip {
-                            id = ui.stable("header_tip"),
-                            target = ui.float.anchor(Section, ui.stable("preview"), "header"),
-                            parent_point = ui.attach.right_bottom,
-                            element_point = ui.attach.left_top,
-                            offset_x = 8,
-                            offset_y = 6,
-                            background = rgba(0.76, 0.88, 0.98, 0.98),
-                            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.28, 0.44, 0.60, 1) },
-                            padding = 8,
-                        } {
-                            ui.label { text = "Section header exported through ui.float.anchor", text_color = rgba(0.10, 0.18, 0.26, 1) },
+                            ui.label { text = "Tooltip target resolved through preview:float(\"image\")", text_color = rgba(0.16, 0.13, 0.08, 1) },
                         },
                     },
                 },
@@ -134,8 +123,8 @@ assert(#bound.state == 3)
 local names = {}
 for _, s in ipairs(bound.state) do names[s.name] = true end
 assert(names["workspace/gap"])
-assert(names["assets/gap"])
-assert(names["preview/gap"])
+assert(names["workspace/assets/gap"])
+assert(names["workspace/preview/gap"])
 
 local kernel = terraui.compile(decl)
 local Frame = kernel:frame_type()

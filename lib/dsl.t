@@ -35,6 +35,10 @@ local function is_decl_widget_def(v)
     return type(v) == "table" and Decl.WidgetDef:isclassof(v)
 end
 
+local function is_scope(v)
+    return type(v) == "table" and rawget(v, "__terraui_scope") == true
+end
+
 local function zero()
     return Decl.NumLit(0)
 end
@@ -63,6 +67,7 @@ end
 
 local function normalize_id(id)
     if id == nil then return Decl.Auto end
+    if is_scope(id) then return id._id end
     if is_decl_id(id) then return id end
     if type(id) == "string" then return Decl.Stable(id) end
     error("invalid id")
@@ -203,24 +208,6 @@ local function has_path_sep(name)
     return type(name) == "string" and name:find("/", 1, true) ~= nil
 end
 
-local function normalized_path_name(...)
-    local parts = {}
-    for i = 1, select("#", ...) do
-        local v = select(i, ...)
-        if type(v) == "string" then
-            parts[#parts + 1] = v
-        elseif is_decl_id(v) then
-            if v.kind ~= "Stable" then
-                error("path_id only supports stable/string segments")
-            end
-            parts[#parts + 1] = v.name
-        else
-            error("invalid path_id segment")
-        end
-    end
-    return table.concat(parts, "/")
-end
-
 local function normalized_local_id_name(v, label)
     label = label or "local id"
     if type(v) == "string" then
@@ -236,53 +223,19 @@ local function normalized_local_id_name(v, label)
 end
 
 local function compose_scoped_id(base_id, ...)
-    local suffix = normalized_path_name(...)
-    assert(suffix ~= "", "scoped_id requires at least one suffix segment")
+    local parts = {}
+    for i = 1, select("#", ...) do
+        parts[#parts + 1] = normalized_local_id_name(select(i, ...))
+    end
+    local suffix = table.concat(parts, "/")
+    assert(suffix ~= "", "scope composition requires at least one local segment")
     local id = normalize_id(base_id)
     if id.kind == "Stable" then
         return Decl.Stable(id.name .. "/" .. suffix)
     elseif id.kind == "Indexed" then
         return Decl.Indexed(id.name .. "/" .. suffix, id.index)
     end
-    error("scoped_id requires a stable or indexed base id")
-end
-
-local function is_widget_anchor(v)
-    return type(v) == "table" and v.__terraui_widget_anchor == true
-end
-
-local function normalize_widget_anchor_name(v)
-    if is_widget_anchor(v) then v = v.name end
-    return normalized_local_id_name(v, "widget anchor")
-end
-
-local function collect_widget_local_ids_from_children(ids, children)
-    for _, child in ipairs(children or {}) do
-        if child.kind == "NodeChild" then
-            local node = child.value
-            if node.id.kind == "Stable" and not has_path_sep(node.id.name) then
-                ids[node.id.name] = true
-            end
-            collect_widget_local_ids_from_children(ids, node.children)
-        elseif child.kind == "WidgetChild" then
-            local call = child.value
-            if call.id ~= nil and call.id.kind == "Stable" and not has_path_sep(call.id.name) then
-                ids[call.id.name] = true
-            end
-            for _, slot in ipairs(call.slots) do
-                collect_widget_local_ids_from_children(ids, slot.children)
-            end
-        end
-    end
-end
-
-local function collect_widget_local_ids(root)
-    local ids = {}
-    if root.id.kind == "Stable" and not has_path_sep(root.id.name) then
-        ids[root.id.name] = true
-    end
-    collect_widget_local_ids_from_children(ids, root.children)
-    return ids
+    error("scope composition requires a stable or indexed base id")
 end
 
 local function widget_fields(def)
@@ -292,21 +245,6 @@ local function widget_fields(def)
     for _, p in ipairs(def.props) do props[p.name] = p end
     for _, s in ipairs(def.slots) do slots[s.name] = true end
     return props, slots
-end
-
-local function widget_anchor_set(def)
-    return def and rawget(def, "_terraui_anchor_set") or nil
-end
-
-local function validate_widget_anchor(def, anchor_name)
-    if def == nil then return end
-    local anchors = widget_anchor_set(def)
-    if anchors == nil then
-        error("widget has no declared anchors in DSL: " .. def.name)
-    end
-    if not anchors[anchor_name] then
-        error("unknown widget anchor in DSL for " .. def.name .. ": " .. anchor_name)
-    end
 end
 
 local function type_name(ty)
@@ -468,6 +406,32 @@ function M.dsl()
     local ui = {}
     local widget_registry = {}
 
+    local Scope = {}
+    Scope.__index = Scope
+
+    local function make_scope(id)
+        local sid = normalize_id(id)
+        if sid.kind ~= "Stable" and sid.kind ~= "Indexed" then
+            error("ui.scope requires a stable or indexed id")
+        end
+        return setmetatable({
+            __terraui_scope = true,
+            _id = sid,
+        }, Scope)
+    end
+
+    function Scope:id()
+        return self._id
+    end
+
+    function Scope:child(...)
+        return make_scope(compose_scoped_id(self, ...))
+    end
+
+    function Scope:float(...)
+        return Decl.FloatById(compose_scoped_id(self, ...))
+    end
+
     ui.types = {
         bool = Decl.TBool,
         number = Decl.TNumber,
@@ -499,28 +463,10 @@ function M.dsl()
     ui.float = {
         parent = Decl.FloatParent,
         by_id = function(id) return Decl.FloatById(normalize_id(id)) end,
-        path = function(...) return Decl.FloatById(Decl.Stable(normalized_path_name(...))) end,
-        scoped = function(base_id, ...) return Decl.FloatById(compose_scoped_id(base_id, ...)) end,
-        anchor = function(widget, base_id, anchor_name)
-            local def = is_decl_widget_def(widget) and widget or widget_registry[widget]
-            assert(def ~= nil, "ui.float.anchor expects known widget name or Decl.WidgetDef")
-            local anchor = normalize_widget_anchor_name(anchor_name)
-            validate_widget_anchor(def, anchor)
-            return Decl.FloatById(compose_scoped_id(base_id, anchor))
-        end,
     }
 
-    ui.path_id = function(...) return Decl.Stable(normalized_path_name(...)) end
-    ui.scoped_id = function(base_id, ...) return compose_scoped_id(base_id, ...) end
-    ui.widget_anchor = function(name)
-        return { __terraui_widget_anchor = true, name = normalize_widget_anchor_name(name) }
-    end
-    ui.anchor_id = function(widget, base_id, anchor_name)
-        local def = is_decl_widget_def(widget) and widget or widget_registry[widget]
-        assert(def ~= nil, "ui.anchor_id expects known widget name or Decl.WidgetDef")
-        local anchor = normalize_widget_anchor_name(anchor_name)
-        validate_widget_anchor(def, anchor)
-        return compose_scoped_id(base_id, anchor)
+    ui.scope = function(id)
+        return make_scope(id)
     end
 
     ui.as_expr = M.as_expr
@@ -616,26 +562,7 @@ function M.dsl()
             for _, s in ipairs(spec.slots or {}) do slots:insert(s) end
             assert(spec.root and is_decl_node(spec.root), "widget.root must be a Decl.Node")
 
-            local anchor_set = nil
-            if spec.anchors ~= nil then
-                anchor_set = {}
-                local local_ids = collect_widget_local_ids(spec.root)
-                for _, a in ipairs(spec.anchors) do
-                    local anchor = normalize_widget_anchor_name(a)
-                    if anchor_set[anchor] ~= nil then
-                        error("duplicate widget anchor in DSL for " .. name .. ": " .. anchor)
-                    end
-                    if not local_ids[anchor] then
-                        error("unknown widget anchor target in DSL for " .. name .. ": " .. anchor)
-                    end
-                    anchor_set[anchor] = true
-                end
-            end
-
             local def = Decl.WidgetDef(name, props, state, slots, spec.root)
-            if anchor_set ~= nil then
-                rawset(def, "_terraui_anchor_set", anchor_set)
-            end
             if widget_registry[name] ~= nil and widget_registry[name] ~= def then
                 error("duplicate widget name in DSL environment: " .. name)
             end

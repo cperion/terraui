@@ -371,6 +371,9 @@ local assets_children = {
     label("Use the center rail and inspector widgets to compare mode-specific metadata.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
 }
 
+local app = ui.scope("app")
+local preview_card = app:child("preview_card")
+
 local decl = ui.component("sdl_gl_demo") {
     params = params,
     widgets = {
@@ -389,7 +392,7 @@ local decl = ui.component("sdl_gl_demo") {
         width = ui.grow(),
         height = ui.grow(),
     } {
-        ui.use(Shell) { id = ui.stable("app") } {
+        ui.use(Shell) { id = app } {
         toolbar = {
             ui.use(ToolbarBar) { id = ui.stable("toolbar") } {
                 primary = {
@@ -429,7 +432,7 @@ local decl = ui.component("sdl_gl_demo") {
                     accent = ui.param_ref("accent"),
                 } {},
 
-                ui.use(PreviewCard) { id = ui.path_id("app", "preview_card") } {
+                ui.use(PreviewCard) { id = preview_card } {
                     media = {
                         ui.image_view {
                             id = ui.stable("preview"),
@@ -494,7 +497,7 @@ local decl = ui.component("sdl_gl_demo") {
 
                 ui.tooltip {
                     id = ui.stable("tooltip"),
-                    target = ui.float.scoped(ui.path_id("app", "preview_card"), "preview"),
+                    target = preview_card:float("preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,

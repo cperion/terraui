@@ -146,10 +146,7 @@ Implemented now:
 - `param_ref`
 - `state_ref`
 - `prop_ref`
-- `path_id`
-- `scoped_id`
-- `anchor_id`
-- `widget_anchor`
+- `scope`
 - `call`
 - `select`
 - `num`
@@ -324,7 +321,6 @@ ui.use("Split") { id = ui.stable("split1") } {
 Lowering notes:
 - `ui.widget(...)` returns `Decl.WidgetDef`
 - widget `spec.state` reuses ordinary `ui.state(...)` declarations and becomes widget-local state during bind elaboration
-- optional `spec.anchors = { ui.widget_anchor("name"), ... }` declares exported widget-local target ids for DSL helpers
 - `ui.widget_prop(...)` returns `Decl.WidgetProp`
 - `ui.widget_slot(...)` returns `Decl.WidgetSlot`
 - `ui.use(...)` accepts either a widget name or a `Decl.WidgetDef`; when the widget is known at capture time, props/slots are validated immediately
@@ -332,12 +328,10 @@ Lowering notes:
 - widget prop values whose types depend on component params/state are checked during bind
 - `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
-- `ui.path_id(...)` joins stable id path segments with `/`
-- `ui.scoped_id(base_id, "child", ...)` appends local path segments onto a stable/indexed base id
-- `ui.anchor_id(WidgetDef, base_id, "anchor")` composes and validates a declared widget anchor
-- `ui.float.path(...)` builds an explicit path-based floating target id
-- `ui.float.scoped(base_id, "child", ...)` builds a floating target from a stable/indexed widget-instance id plus local child ids
-- `ui.float.anchor(WidgetDef, base_id, "anchor")` builds a floating target from a declared widget anchor
+- `ui.scope(id)` creates a DSL-only scope handle for a stable/indexed widget instance id
+- `scope:child("name", ...)` composes one or more nested local ids and returns another scope handle
+- `scope:float("name", ...)` builds `Decl.FloatById` for a child under that scope
+- scope handles are accepted anywhere an `id` is accepted in the public DSL
 - `ui.state_ref(name)` inside a widget body resolves widget-local state first, then outer component state
 - the second brace on `ui.use(...)` may be either:
   - an ordered child list for the default `children` slot
@@ -422,19 +416,19 @@ That preserves the canonical compiler spine while still giving widget authors ty
 Preferred public identity helpers:
 
 ```lua
-ui.stable("name")
-ui.indexed("name", i)
-ui.path_id("widget_instance", "child")
-ui.scoped_id(ui.stable("widget_instance"), "child")
-ui.anchor_id(Card, ui.stable("card1"), "header_row")
+local card = ui.scope("card1")
+
+card
+card:child("header")
+card:float("header")
 ```
 
 Raw string ids also work in the current implementation and lower to stable ids.
 
 Implementation note:
 - slash-qualified stable ids are treated as explicit paths during bind
-- `ui.scoped_id(...)` is the preferred helper when composing ids from a widget-instance id plus local child ids
-- declared widget anchors provide an optional stronger contract for exported internal target ids via `ui.anchor_id(...)` / `ui.float.anchor(...)`
+- `ui.scope(...)` is the preferred public helper for composing ids from a widget-instance id plus local child ids
+- scope handles are DSL-only sugar and lower back into ordinary `Decl.Id` / `Decl.FloatById`
 - that keeps cross-widget target references practical without requiring lower phases to know about widgets
 
 ## 14. Error behavior
@@ -447,7 +441,6 @@ The current DSL fails early on:
 - missing required widget props at DSL capture time when the widget definition is known
 - unknown widget props/slots at DSL capture time when the widget definition is known
 - obvious widget prop type mismatches at DSL capture time (for example passing a number literal to a string prop)
-- duplicate or unknown declared widget anchors in the DSL
 - duplicate widget names / prop names / slot names during bind
 - unknown widget names during bind when the widget definition was not available at DSL capture time
 - context-aware widget prop type mismatches during bind (for example passing `param_ref` of the wrong declared type)
