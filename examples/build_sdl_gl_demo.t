@@ -126,6 +126,238 @@ local params = {
     ui.param("event_3")          { type = ui.types.string, default = "Event: text now cached into reusable GL textures" },
 }
 
+local HeaderBadge = ui.widget("HeaderBadge") {
+    props = {
+        ui.widget_prop("title") { type = ui.types.string },
+        ui.widget_prop("subtitle") { type = ui.types.string },
+        ui.widget_prop("accent") { type = ui.types.color },
+    },
+    root = ui.row {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.fit(),
+        gap = 10,
+        align_y = ui.align_y.center,
+    } {
+        ui.column { id = ui.stable("text"), width = ui.grow(), height = ui.fit(), gap = 2 } {
+            label(ui.prop_ref("title"), { font_size = 24 }),
+            label(ui.prop_ref("subtitle"), { font_size = 14, text_color = ui.prop_ref("accent") }),
+        },
+        ui.column {
+            id = ui.stable("swatch"),
+            width = ui.fixed(18),
+            height = ui.fixed(18),
+            background = ui.prop_ref("accent"),
+            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.95, 0.95, 0.98, 0.35) },
+        } {},
+    },
+}
+
+local InfoRowWidget = ui.widget("InfoRow") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 8 },
+    },
+    props = {
+        ui.widget_prop("lhs") { type = ui.types.string },
+        ui.widget_prop("rhs") { type = ui.types.string },
+    },
+    root = ui.row {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.fit(),
+        gap = ui.state_ref("gap"),
+    } {
+        label(ui.prop_ref("lhs"), { font_size = 14, text_color = rgba(0.70, 0.74, 0.80, 1) }),
+        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+        label(ui.prop_ref("rhs"), { font_size = 14, text_color = rgba(0.94, 0.95, 0.97, 1) }),
+    },
+}
+
+local ProgressMeterWidget = ui.widget("ProgressMeter") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 4 },
+    },
+    props = {
+        ui.widget_prop("title") { type = ui.types.string },
+        ui.widget_prop("bar_width") { type = ui.types.number },
+        ui.widget_prop("fill") { type = ui.types.color },
+    },
+    root = ui.column {
+        id = ui.stable("root"),
+        width = ui.fit(),
+        height = ui.fit(),
+        gap = ui.state_ref("gap"),
+    } {
+        label(ui.prop_ref("title"), { font_size = 13, text_color = rgba(0.70, 0.74, 0.80, 1) }),
+        ui.column {
+            id = ui.stable("track"),
+            width = ui.fixed(220),
+            height = ui.fixed(14),
+            background = rgba(0.14, 0.16, 0.20, 1),
+            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.26, 0.28, 0.33, 1) },
+        } {
+            ui.spacer {
+                id = ui.stable("fill"),
+                width = ui.fixed(ui.prop_ref("bar_width")),
+                height = ui.fixed(14),
+                background = ui.prop_ref("fill"),
+            },
+        },
+    },
+}
+
+local ToolbarBar = ui.widget("ToolbarBar") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 8 },
+    },
+    slots = {
+        ui.widget_slot("primary"),
+        ui.widget_slot("trailing"),
+    },
+    root = ui.row {
+        id = ui.stable("root"),
+        height = ui.fixed(52),
+        padding = { left = 14, top = 8, right = 14, bottom = 8 },
+        gap = ui.state_ref("gap"),
+        align_y = ui.align_y.center,
+        background = rgba(0.10, 0.11, 0.14, 1),
+        border = ui.border { bottom = 1, color = rgba(0.22, 0.24, 0.28, 1) },
+    } {
+        ui.slot("primary"),
+        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+        ui.slot("trailing"),
+    },
+}
+
+local PreviewCard = ui.widget("PreviewCard") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 10 },
+    },
+    slots = {
+        ui.widget_slot("media"),
+        ui.widget_slot("meta"),
+        ui.widget_slot("meters"),
+    },
+    root = ui.column(panel {
+        id = ui.stable("root"),
+        width = ui.fit(),
+        height = ui.fit(),
+        gap = ui.state_ref("gap"),
+    }) {
+        ui.slot("media"),
+        ui.row { id = ui.stable("bottom"), width = ui.grow(), height = ui.fit(), gap = 16 } {
+            ui.column { id = ui.stable("meta_col"), width = ui.fit(), height = ui.fit(), gap = 6 } {
+                ui.slot("meta"),
+            },
+            ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+            ui.column { id = ui.stable("meter_col"), width = ui.fit(), height = ui.fit(), gap = 8 } {
+                ui.slot("meters"),
+            },
+        },
+    },
+}
+
+local ActivityStrip = ui.widget("ActivityStrip") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 14 },
+    },
+    slots = {
+        ui.widget_slot("log"),
+        ui.widget_slot("chart"),
+    },
+    root = ui.row(panel {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.fit(),
+        gap = ui.state_ref("gap"),
+        align_y = ui.align_y.center,
+    }) {
+        ui.column { id = ui.stable("log_col"), width = ui.grow(), height = ui.fit(), gap = 4 } {
+            ui.slot("log"),
+        },
+        ui.slot("chart"),
+    },
+}
+
+local InspectorPanel = ui.widget("InspectorPanel") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 10 },
+    },
+    slots = {
+        ui.widget_slot("summary"),
+        ui.widget_slot("context"),
+        ui.widget_slot("metadata"),
+        ui.widget_slot("renderer"),
+        ui.widget_slot("chart"),
+    },
+    root = ui.column(panel {
+        id = ui.stable("root"),
+        width = ui.fixed(320),
+        height = ui.grow(),
+        gap = ui.state_ref("gap"),
+    }) {
+        ui.slot("summary"),
+        ui.slot("context"),
+        ui.slot("metadata"),
+        ui.slot("renderer"),
+        ui.slot("chart"),
+    },
+}
+
+local FooterBar = ui.widget("FooterBar") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 12 },
+    },
+    slots = {
+        ui.widget_slot("left"),
+        ui.widget_slot("right"),
+    },
+    root = ui.row {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.fixed(34),
+        padding = { left = 14, top = 8, right = 14, bottom = 8 },
+        gap = ui.state_ref("gap"),
+        align_y = ui.align_y.center,
+        background = rgba(0.09, 0.10, 0.12, 1),
+        border = ui.border { top = 1, color = rgba(0.20, 0.22, 0.26, 1) },
+    } {
+        ui.slot("left"),
+        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
+        ui.slot("right"),
+    },
+}
+
+local Shell = ui.widget("Shell") {
+    slots = {
+        ui.widget_slot("toolbar"),
+        ui.widget_slot("assets"),
+        ui.widget_slot("center"),
+        ui.widget_slot("inspector"),
+        ui.widget_slot("footer"),
+    },
+    root = ui.column {
+        id = ui.stable("root"),
+        width = ui.grow(),
+        height = ui.grow(),
+        background = rgba(0.07, 0.08, 0.10, 1),
+    } {
+        ui.slot("toolbar"),
+        ui.row {
+            id = ui.stable("main"),
+            width = ui.grow(),
+            height = ui.grow(),
+            gap = 12,
+            padding = 12,
+        } {
+            ui.slot("assets"),
+            ui.slot("center"),
+            ui.slot("inspector"),
+        },
+        ui.slot("footer"),
+    },
+}
+
 local assets_children = {
     label("Assets", { font_size = 21 }),
     label("Choose a surface to drive the preview + inspector.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
@@ -141,39 +373,40 @@ local assets_children = {
 
 local decl = ui.component("sdl_gl_demo") {
     params = params,
+    widgets = {
+        HeaderBadge,
+        InfoRowWidget,
+        ProgressMeterWidget,
+        ToolbarBar,
+        PreviewCard,
+        ActivityStrip,
+        InspectorPanel,
+        FooterBar,
+        Shell,
+    },
     root = ui.column {
-        id = ui.stable("root"),
+        id = ui.stable("root_mount"),
         width = ui.grow(),
         height = ui.grow(),
-        background = rgba(0.07, 0.08, 0.10, 1),
     } {
-        ui.row {
-            id = ui.stable("toolbar"),
-            height = ui.fixed(52),
-            padding = { left = 14, top = 8, right = 14, bottom = 8 },
-            gap = 8,
-            align_y = ui.align_y.center,
-            background = rgba(0.10, 0.11, 0.14, 1),
-            border = ui.border { bottom = 1, color = rgba(0.22, 0.24, 0.28, 1) },
-        } {
-            button("Inspect", "tool:inspect"),
-            button("Paint",   "tool:paint",   { background = rgba(0.54, 0.28, 0.18, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.78, 0.48, 0.32, 1) } }),
-            button("Lighting", "tool:lighting", { background = rgba(0.35, 0.28, 0.12, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.68, 0.55, 0.24, 1) } }),
-            button("Export",  "tool:export",  { background = rgba(0.22, 0.44, 0.26, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.42, 0.70, 0.46, 1) } }),
-            ui.spacer { width = ui.grow(), height = ui.fixed(0) },
-            ui.column { gap = 2, width = ui.fit(), height = ui.fit() } {
-                label("TerraUI SDL + OpenGL demo", { font_size = 18 }),
-                label(ui.param_ref("status_secondary"), { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+        ui.use("Shell") { id = ui.stable("app") } {
+        toolbar = {
+            ui.use("ToolbarBar") { id = ui.stable("toolbar") } {
+                primary = {
+                    button("Inspect", "tool:inspect"),
+                    button("Paint",   "tool:paint",   { background = rgba(0.54, 0.28, 0.18, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.78, 0.48, 0.32, 1) } }),
+                    button("Lighting", "tool:lighting", { background = rgba(0.35, 0.28, 0.12, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.68, 0.55, 0.24, 1) } }),
+                    button("Export",  "tool:export",  { background = rgba(0.22, 0.44, 0.26, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.42, 0.70, 0.46, 1) } }),
+                },
+                trailing = {
+                    ui.column { gap = 2, width = ui.fit(), height = ui.fit() } {
+                        label("TerraUI SDL + OpenGL demo", { font_size = 18 }),
+                        label(ui.param_ref("status_secondary"), { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    },
+                },
             },
         },
-
-        ui.row {
-            id = ui.stable("main"),
-            width = ui.grow(),
-            height = ui.grow(),
-            gap = 12,
-            padding = 12,
-        } {
+        assets = {
             ui.scroll_region(panel {
                 id = ui.stable("assets"),
                 width = ui.fixed(250),
@@ -181,85 +414,70 @@ local decl = ui.component("sdl_gl_demo") {
                 vertical = true,
                 scroll_y = 20,
             }) (assets_children),
-
+        },
+        center = {
             ui.column {
                 id = ui.stable("center"),
                 width = ui.grow(),
                 height = ui.grow(),
                 gap = 12,
             } {
-                ui.row { width = ui.grow(), height = ui.fit(), gap = 10, align_y = ui.align_y.center } {
-                    ui.column { width = ui.grow(), height = ui.fit(), gap = 2 } {
-                        label(ui.param_ref("preview_title"), { font_size = 24 }),
-                        label(ui.param_ref("selected_asset"), { font_size = 14, text_color = ui.param_ref("accent") }),
-                    },
-                    ui.column {
-                        width = ui.fixed(18),
-                        height = ui.fixed(18),
-                        background = ui.param_ref("accent"),
-                        border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.95, 0.95, 0.98, 0.35) },
-                    } {},
-                },
+                ui.use("HeaderBadge") {
+                    id = ui.stable("preview_header"),
+                    title = ui.param_ref("preview_title"),
+                    subtitle = ui.param_ref("selected_asset"),
+                    accent = ui.param_ref("accent"),
+                } {},
 
-                ui.column(panel {
-                    id = ui.stable("preview_card"),
-                    width = ui.fit(),
-                    height = ui.fit(),
-                    gap = 10,
-                }) {
-                    ui.image_view {
-                        id = ui.stable("preview"),
-                        image = ui.param_ref("preview_image"),
-                        width = ui.fixed(520),
-                        height = ui.fixed(300),
-                        aspect_ratio = 1.73,
-                        border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.30, 0.32, 0.38, 1) },
-                        tint = rgba(1,1,1,1),
-                    },
-                    ui.custom {
-                        id = ui.stable("preview_overlay"),
-                        kind = "preview_guides",
-                        target = ui.float.by_id("preview"),
-                        element_point = ui.attach.left_top,
-                        parent_point = ui.attach.left_top,
-                        width = ui.fixed(520),
-                        height = ui.fixed(300),
-                        z_index = 12,
-                        pointer_capture = ui.pointer_capture.passthrough,
-                    },
-                    ui.row { width = ui.grow(), height = ui.fit(), gap = 16 } {
-                        ui.column { width = ui.fit(), height = ui.fit(), gap = 6 } {
-                            info_row("Tool", ui.param_ref("selected_tool")),
-                            info_row("Selection", ui.param_ref("selected_asset")),
-                            info_row("Mode", ui.param_ref("mode_summary")),
-                            info_row("State", ui.param_ref("detail_b")),
+                ui.use("PreviewCard") { id = ui.stable("app/preview_card") } {
+                    media = {
+                        ui.image_view {
+                            id = ui.stable("preview"),
+                            image = ui.param_ref("preview_image"),
+                            width = ui.fixed(520),
+                            height = ui.fixed(300),
+                            aspect_ratio = 1.73,
+                            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.30, 0.32, 0.38, 1) },
+                            tint = rgba(1,1,1,1),
                         },
-                        ui.spacer { width = ui.grow(), height = ui.fixed(0) },
-                        ui.column { width = ui.fit(), height = ui.fit(), gap = 8 } {
-                            progress_meter("Coverage", "progress_a"),
-                            progress_meter("Bake completion", "progress_b"),
+                        ui.custom {
+                            id = ui.stable("preview_overlay"),
+                            kind = "preview_guides",
+                            target = ui.float.by_id("preview"),
+                            element_point = ui.attach.left_top,
+                            parent_point = ui.attach.left_top,
+                            width = ui.fixed(520),
+                            height = ui.fixed(300),
+                            z_index = 12,
+                            pointer_capture = ui.pointer_capture.passthrough,
                         },
+                    },
+                    meta = {
+                        ui.use("InfoRow") { id = ui.stable("tool_row"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                        ui.use("InfoRow") { id = ui.stable("selection_row"), lhs = "Selection", rhs = ui.param_ref("selected_asset") } {},
+                        ui.use("InfoRow") { id = ui.stable("mode_row"), lhs = "Mode", rhs = ui.param_ref("mode_summary") } {},
+                        ui.use("InfoRow") { id = ui.stable("state_row"), lhs = "State", rhs = ui.param_ref("detail_b") } {},
+                    },
+                    meters = {
+                        ui.use("ProgressMeter") { id = ui.stable("coverage_meter"), title = "Coverage", bar_width = ui.param_ref("progress_a"), fill = ui.param_ref("accent") } {},
+                        ui.use("ProgressMeter") { id = ui.stable("bake_meter"), title = "Bake completion", bar_width = ui.param_ref("progress_b"), fill = ui.param_ref("accent") } {},
                     },
                 },
 
-                ui.row(panel {
-                    id = ui.stable("activity_strip"),
-                    width = ui.grow(),
-                    height = ui.fit(),
-                    gap = 14,
-                    align_y = ui.align_y.center,
-                }) {
-                    ui.column { width = ui.grow(), height = ui.fit(), gap = 4 } {
+                ui.use("ActivityStrip") { id = ui.stable("activity") } {
+                    log = {
                         label(ui.param_ref("status_primary"), { font_size = 16 }),
                         label(ui.param_ref("event_1"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
                         label(ui.param_ref("event_2"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
                         label(ui.param_ref("event_3"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
                     },
-                    ui.custom {
-                        id = ui.stable("timeline_wave"),
-                        kind = "timeline_wave",
-                        width = ui.fixed(240),
-                        height = ui.fixed(88),
+                    chart = {
+                        ui.custom {
+                            id = ui.stable("timeline_wave"),
+                            kind = "timeline_wave",
+                            width = ui.fixed(240),
+                            height = ui.fixed(88),
+                        },
                     },
                 },
 
@@ -276,7 +494,7 @@ local decl = ui.component("sdl_gl_demo") {
 
                 ui.tooltip {
                     id = ui.stable("tooltip"),
-                    target = ui.float.by_id("preview"),
+                    target = ui.float.by_id("preview_card/preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,
@@ -292,62 +510,61 @@ local decl = ui.component("sdl_gl_demo") {
                     }),
                 },
             },
-
-            ui.column(panel {
-                id = ui.stable("inspector"),
-                width = ui.fixed(320),
-                height = ui.grow(),
-                gap = 10,
-            }) {
-                label("Inspector", { font_size = 21 }),
-                label("Selection", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                info_row("Asset", ui.param_ref("selected_asset")),
-                info_row("Tool", ui.param_ref("selected_tool")),
-                info_row("Target", ui.param_ref("preview_title")),
-                ui.custom {
-                    id = ui.stable("accent_swatches"),
-                    kind = "accent_swatches",
-                    width = ui.fixed(280),
-                    height = ui.fixed(44),
+        },
+        inspector = {
+            ui.use("InspectorPanel") { id = ui.stable("inspector") } {
+                summary = {
+                    label("Inspector", { font_size = 21 }),
+                    label("Selection", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    ui.use("InfoRow") { id = ui.stable("asset_info"), lhs = "Asset", rhs = ui.param_ref("selected_asset") } {},
+                    ui.use("InfoRow") { id = ui.stable("tool_info"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                    ui.use("InfoRow") { id = ui.stable("target_info"), lhs = "Target", rhs = ui.param_ref("preview_title") } {},
+                    ui.custom {
+                        id = ui.stable("accent_swatches"),
+                        kind = "accent_swatches",
+                        width = ui.fixed(280),
+                        height = ui.fixed(44),
+                    },
                 },
-                ui.spacer { height = ui.fixed(4), width = ui.fixed(0) },
-                label("Tool context", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                label(ui.param_ref("mode_summary"), { font_size = 14 }),
-                label(ui.param_ref("mode_line_1"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
-                label(ui.param_ref("mode_line_2"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
-                label(ui.param_ref("mode_line_3"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
-                ui.spacer { height = ui.fixed(6), width = ui.fixed(0) },
-                label("Asset metadata", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                label(ui.param_ref("asset_meta_1"), { font_size = 13 }),
-                label(ui.param_ref("asset_meta_2"), { font_size = 13 }),
-                label(ui.param_ref("asset_meta_3"), { font_size = 13 }),
-                ui.spacer { height = ui.fixed(6), width = ui.fixed(0) },
-                label("Renderer", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                label("• split streams merged by (z, seq)", { font_size = 13 }),
-                label("• CPU-side scissor stack replay", { font_size = 13 }),
-                label("• text measured in kernel, rasterized once per cache key", { font_size = 13 }),
-                ui.custom {
-                    id = ui.stable("inspector_chart"),
-                    kind = "inspector_chart",
-                    width = ui.fixed(280),
-                    height = ui.fixed(96),
+                context = {
+                    label("Tool context", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    label(ui.param_ref("mode_summary"), { font_size = 14 }),
+                    label(ui.param_ref("mode_line_1"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
+                    label(ui.param_ref("mode_line_2"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
+                    label(ui.param_ref("mode_line_3"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
+                },
+                metadata = {
+                    label("Asset metadata", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    label(ui.param_ref("asset_meta_1"), { font_size = 13 }),
+                    label(ui.param_ref("asset_meta_2"), { font_size = 13 }),
+                    label(ui.param_ref("asset_meta_3"), { font_size = 13 }),
+                },
+                renderer = {
+                    label("Renderer", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                    label("• split streams merged by (z, seq)", { font_size = 13 }),
+                    label("• CPU-side scissor stack replay", { font_size = 13 }),
+                    label("• text measured in kernel, rasterized once per cache key", { font_size = 13 }),
+                },
+                chart = {
+                    ui.custom {
+                        id = ui.stable("inspector_chart"),
+                        kind = "inspector_chart",
+                        width = ui.fixed(280),
+                        height = ui.fixed(96),
+                    },
                 },
             },
         },
-
-        ui.row {
-            id = ui.stable("footer"),
-            width = ui.grow(),
-            height = ui.fixed(34),
-            padding = { left = 14, top = 8, right = 14, bottom = 8 },
-            gap = 12,
-            align_y = ui.align_y.center,
-            background = rgba(0.09, 0.10, 0.12, 1),
-            border = ui.border { top = 1, color = rgba(0.20, 0.22, 0.26, 1) },
-        } {
-            label(ui.param_ref("footer_text"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
-            ui.spacer { width = ui.grow(), height = ui.fixed(0) },
-            label("Terra AOT executable", { font_size = 13, text_color = rgba(0.52, 0.56, 0.62, 1) }),
+        footer = {
+            ui.use("FooterBar") { id = ui.stable("footer") } {
+                left = {
+                    label(ui.param_ref("footer_text"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
+                },
+                right = {
+                    label("Terra AOT executable", { font_size = 13, text_color = rgba(0.52, 0.56, 0.62, 1) }),
+                },
+            },
+        },
         },
     },
 }
