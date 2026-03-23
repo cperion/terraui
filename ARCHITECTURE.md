@@ -25,6 +25,7 @@ Current implementation files of note:
 - `docs/design/09-authoring-api.md`
 - `docs/design/10-builder-api-reference.md`
 - `docs/design/11-schema-dsl.md`
+- `docs/design/12-backend-contracts.md`
 - `docs/design/terraui.asdl`
 
 ## Notes
@@ -54,4 +55,5 @@ Important final-source changes reflected in the split docs:
 10. `docs/design/11-schema-dsl.md`
 11. `docs/design/02-layout-input-and-rendering.md`
 12. `docs/design/03-runtime-backends-opengl.md`
-13. `docs/design/04-prototype-and-open-questions.md`
+13. `docs/design/12-backend-contracts.md`
+14. `docs/design/04-prototype-and-open-questions.md`

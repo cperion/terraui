@@ -19,6 +19,7 @@ This file is the entry point for the TerraUI design set.
 - `docs/design/09-authoring-api.md` — public immediate-mode builder API and lowering rules
 - `docs/design/10-builder-api-reference.md` — concrete builder functions, option tables, and signatures
 - `docs/design/11-schema-dsl.md` — Terra language-extension schema DSL for authoring and validating the ASDL
+- `docs/design/12-backend-contracts.md` — backend identity, runtime session, and presenter/backend contract
 - `docs/design/terraui.asdl` — canonical raw ASDL schema
 
 Recommended implementation reading order:
@@ -33,7 +34,8 @@ Recommended implementation reading order:
 9. `11-schema-dsl.md`
 10. `02-layout-input-and-rendering.md`
 11. `03-runtime-backends-opengl.md`
-12. `04-prototype-and-open-questions.md`
+12. `12-backend-contracts.md`
+13. `04-prototype-and-open-questions.md`
 
 ## 1. Product definition
 

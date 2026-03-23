@@ -197,6 +197,7 @@ Start with:
 - `ARCHITECTURE.md`
 - `docs/design/00-overview.md`
 - `docs/design/11-schema-dsl.md`
+- `docs/design/12-backend-contracts.md`
 
 ## Notes
 

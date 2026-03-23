@@ -12,6 +12,9 @@ This document captures the runtime-facing architecture:
 - OpenGL 3.3 backend design
 - presenter ordering and batching
 
+The broader backend/session ownership contract now lives in:
+- `docs/design/12-backend-contracts.md`
+
 ## 2. Runtime model
 
 The kernel ultimately runs against a frame object that contains:
