@@ -13,6 +13,9 @@ local Section = ui.widget("Section") {
     props = {
         ui.widget_prop("title") { type = ui.types.string },
     },
+    anchors = {
+        ui.widget_anchor("header"),
+    },
     slots = {
         ui.widget_slot("toolbar"),
         ui.widget_slot("children"),
@@ -95,7 +98,7 @@ local decl = ui.component("widget_composition_example") {
                         },
                         ui.tooltip {
                             id = ui.stable("tip"),
-                            target = ui.float.path("preview", "image"),
+                            target = ui.float.scoped(ui.stable("preview"), "image"),
                             parent_point = ui.attach.right_top,
                             element_point = ui.attach.left_bottom,
                             offset_x = 8,
@@ -104,7 +107,20 @@ local decl = ui.component("widget_composition_example") {
                             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.55, 0.43, 0.12, 1) },
                             padding = 8,
                         } {
-                            ui.label { text = "Tooltip target resolved through ui.float.path", text_color = rgba(0.16, 0.13, 0.08, 1) },
+                            ui.label { text = "Tooltip target resolved through ui.float.scoped", text_color = rgba(0.16, 0.13, 0.08, 1) },
+                        },
+                        ui.tooltip {
+                            id = ui.stable("header_tip"),
+                            target = ui.float.anchor(Section, ui.stable("preview"), "header"),
+                            parent_point = ui.attach.right_bottom,
+                            element_point = ui.attach.left_top,
+                            offset_x = 8,
+                            offset_y = 6,
+                            background = rgba(0.76, 0.88, 0.98, 0.98),
+                            border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.28, 0.44, 0.60, 1) },
+                            padding = 8,
+                        } {
+                            ui.label { text = "Section header exported through ui.float.anchor", text_color = rgba(0.10, 0.18, 0.26, 1) },
                         },
                     },
                 },

@@ -494,7 +494,7 @@ local decl = ui.component("sdl_gl_demo") {
 
                 ui.tooltip {
                     id = ui.stable("tooltip"),
-                    target = ui.float.path("app", "preview_card", "preview"),
+                    target = ui.float.scoped(ui.path_id("app", "preview_card"), "preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,

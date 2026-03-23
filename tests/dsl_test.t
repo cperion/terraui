@@ -238,13 +238,58 @@ do
     assert(not ok3)
     assert(err3:match("unknown widget slot"))
 
+    local anchored = ui.widget("AnchoredCard") {
+        anchors = {
+            ui.widget_anchor("header"),
+        },
+        root = ui.column { id = ui.stable("root") } {
+            ui.label { id = ui.stable("header"), text = "Header" },
+        },
+    }
+
+    local ok_bad_anchor, err_bad_anchor = pcall(function()
+        ui.widget("BadAnchor") {
+            anchors = {
+                ui.widget_anchor("missing"),
+            },
+            root = ui.column { id = ui.stable("root") } {},
+        }
+    end)
+    assert(not ok_bad_anchor)
+    assert(err_bad_anchor:match("unknown widget anchor target"))
+
     local pid = ui.path_id("card1", "preview")
     assert(pid.kind == "Stable")
     assert(pid.name == "card1/preview")
+
+    local sid = ui.scoped_id(ui.indexed("card", 3), "preview")
+    assert(sid.kind == "Indexed")
+    assert(sid.name == "card/preview")
+
     local ft = ui.float.path("card1", "preview")
     assert(ft.kind == "FloatById")
     assert(ft.id.kind == "Stable")
     assert(ft.id.name == "card1/preview")
+
+    local fs = ui.float.scoped(ui.stable("card1"), "preview")
+    assert(fs.kind == "FloatById")
+    assert(fs.id.kind == "Stable")
+    assert(fs.id.name == "card1/preview")
+
+    local aid = ui.anchor_id(anchored, ui.stable("anchored1"), "header")
+    assert(aid.kind == "Stable")
+    assert(aid.name == "anchored1/header")
+
+    local fa = ui.float.anchor(anchored, ui.stable("anchored1"), "header")
+    assert(fa.kind == "FloatById")
+    assert(fa.id.kind == "Stable")
+    assert(fa.id.name == "anchored1/header")
+
+    local ok_anchor, err_anchor = pcall(function()
+        ui.anchor_id(anchored, ui.stable("anchored1"), "missing")
+    end)
+    assert(not ok_anchor)
+    assert(err_anchor:match("unknown widget anchor"))
 
     print("  test 6 (widget DSL validation + path helpers): ok")
 end

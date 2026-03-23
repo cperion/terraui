@@ -19,10 +19,15 @@ This repository currently contains:
   - `ui.widget(...)`
   - `ui.widget_prop(...)`
   - `ui.widget_slot(...)`
+  - `ui.widget_anchor(...)`
   - `ui.use(...)`
   - `ui.slot(...)`
   - `ui.path_id(...)`
+  - `ui.scoped_id(...)`
+  - `ui.anchor_id(...)`
   - `ui.float.path(...)`
+  - `ui.float.scoped(...)`
+  - `ui.float.anchor(...)`
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`
@@ -89,12 +94,17 @@ local Card = ui.widget("Card") {
     state = {
         ui.state("gap") { type = ui.types.number, initial = 8 },
     },
+    anchors = {
+        ui.widget_anchor("header_row"),
+    },
     slots = {
         ui.widget_slot("header"),
         ui.widget_slot("children"),
     },
     root = ui.column { id = ui.stable("root"), gap = ui.state_ref("gap") } {
-        ui.slot("header"),
+        ui.row { id = ui.stable("header_row") } {
+            ui.slot("header"),
+        },
         ui.slot("children"),
     },
 }
@@ -115,6 +125,12 @@ local decl = ui.component("demo") {
 ```
 
 Widget definitions live in `Decl`, but bind elaborates them back into canonical nodes and state slots before planning and compilation.
+
+For cross-widget targeting ergonomics, the DSL now also exposes:
+- `ui.scoped_id(widget_instance_id, "child")`
+- `ui.anchor_id(WidgetDef, widget_instance_id, "anchor")`
+- `ui.float.scoped(...)`
+- `ui.float.anchor(...)`
 
 A focused non-SDL example also lives at:
 

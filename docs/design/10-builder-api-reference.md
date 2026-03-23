@@ -68,6 +68,7 @@ ui.widget_prop
 ui.widget_slot
 ui.use
 ui.slot
+ui.widget_anchor
 
 ui.row
 ui.column
@@ -120,6 +121,8 @@ ui.param_ref
 ui.state_ref
 ui.prop_ref
 ui.path_id
+ui.scoped_id
+ui.anchor_id
 ```
 
 ## 3.4 Namespaces
@@ -225,6 +228,8 @@ ui.attach.right_bottom
 ui.float.parent
 ui.float.by_id(id)
 ui.float.path(...)
+ui.float.scoped(base_id, ...)
+ui.float.anchor(widget, base_id, anchor)
 ```
 
 ## 5. Component and declaration constructors
@@ -303,12 +308,16 @@ ui.widget("Card") {
 - `props`
 - `state`
 - `slots`
+- `anchors`
 
 ### Lowering
 Returns `Decl.WidgetDef`.
 
 ### State note
 `spec.state` reuses ordinary `ui.state(...)` declarations. During bind, each widget instance expands those declarations into namespaced component state slots.
+
+### Anchor note
+`spec.anchors` is optional DSL metadata. Each declared anchor must name an existing local stable id inside the widget-authored tree. It enables `ui.anchor_id(...)` and `ui.float.anchor(...)` to validate exported target names early.
 
 ## 5.5 `ui.widget_prop(name) { ... }`
 
@@ -335,6 +344,16 @@ ui.widget_slot("children")
 
 ### Lowering
 Returns `Decl.WidgetSlot`.
+
+## 5.5a `ui.widget_anchor(name)`
+
+### Form
+```lua
+ui.widget_anchor("header")
+```
+
+### Lowering
+Returns DSL-only widget anchor metadata used by `ui.widget(...){ anchors = { ... } }`.
 
 ## 5.7 `ui.use(name) { props } { children }`
 
@@ -676,6 +695,8 @@ ui.param_ref(name)
 ui.state_ref(name)
 ui.prop_ref(name)
 ui.path_id(...)
+ui.scoped_id(base_id, ...)
+ui.anchor_id(widget, base_id, anchor)
 ```
 
 ## 11. Public entrypoint helpers
@@ -718,10 +739,15 @@ The current builders fail fast on:
 - malformed component root
 - invalid child entries
 - malformed ids / sizes / padding inputs
+- missing/unknown widget props when the widget definition is known at DSL capture time
+- obvious widget prop type mismatches at DSL capture time
+- unknown widget slots when the widget definition is known at DSL capture time
+- duplicate or unknown declared widget anchors in the DSL
+- context-aware widget prop type mismatches during bind
 
 Still future work:
-- strict unknown-prop validation
-- richer type checking at DSL capture time
+- strict unknown-prop validation for all built-in node constructors
+- richer expression typing beyond the current obvious/bindable subset
 
 ## 14. Canonical minimal shipped surface
 
@@ -749,6 +775,9 @@ ui.fragment { ... }
 
 ui.stable("id")
 ui.indexed("id", i)
+ui.path_id(...)
+ui.scoped_id(base_id, ...)
+ui.anchor_id(widget, base_id, anchor)
 ui.grow(...)
 ui.fit(...)
 ui.fixed(...)
