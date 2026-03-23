@@ -7,6 +7,7 @@ local plan = require("lib/plan")
 local compile = require("lib/compile")
 local dsl = require("lib/dsl")
 local presenter = require("lib/presenter")
+local opengl_backend = require("lib/opengl_backend")
 
 local plan_registry = {}
 
@@ -21,6 +22,7 @@ M.schema = schema
 M.types = schema.types
 M.dsl = dsl.dsl
 M.presenter = presenter
+M.opengl_backend = opengl_backend
 
 function M.bind(decl_component, opts)
     return bind.bind_component(decl_component, opts)
