@@ -401,20 +401,44 @@ for _, bench_case in ipairs(cases) do
     }
 end
 
-local function print_result(shape, engine, arg, frames, compile_ms_value, r)
-    print(string.format(
-        "%s,%s,%d,%d,%.3f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f,%d",
-        shape, engine, arg, frames, compile_ms_value,
-        tonumber(r.element_count), tonumber(r.command_count),
-        tonumber(r.rect_count), tonumber(r.border_count), tonumber(r.text_count),
-        tonumber(r.image_count), tonumber(r.scissor_count), tonumber(r.custom_count),
-        tonumber(r.total_ns), tonumber(r.avg_us), tonumber(r.had_error)))
+local function fmt_ms(x)
+    return string.format("%.3f ms", x)
 end
 
-print("shape,engine,arg,frames,compile_ms,elements,commands,rects,borders,texts,images,scissors,customs,total_ns,avg_us,had_error")
+local function fmt_us(x)
+    return string.format("%.3f us", x)
+end
+
+local function fmt_speedup(clay_us, terra_us)
+    if terra_us == 0 then return "inf x" end
+    return string.format("%.2f x", clay_us / terra_us)
+end
+
+print("TerraUI vs Clay benchmark")
+print(string.rep("=", 72))
+print("All timings are hot runtime per frame unless noted otherwise.")
+print()
+
 for _, entry in ipairs(bench_entries) do
     local tr = entry.terraui(entry.frames)
-    print_result(entry.name, "terraui", entry.arg, entry.frames, entry.compile_ms, tr)
     local cr = entry.clay(entry.frames)
-    print_result(entry.name, "clay", entry.arg, entry.frames, 0.0, cr)
+
+    print(string.format("[%s] arg=%d frames=%d", entry.name, entry.arg, entry.frames))
+    print(string.format("  TerraUI  compile: %-12s runtime: %-12s", fmt_ms(entry.compile_ms), fmt_us(tonumber(tr.avg_us))))
+    print(string.format("  Clay     compile: %-12s runtime: %-12s", "n/a", fmt_us(tonumber(cr.avg_us))))
+    print(string.format("  Speedup  runtime: %s (Clay / TerraUI)", fmt_speedup(tonumber(cr.avg_us), tonumber(tr.avg_us))))
+    print(string.format("  Shape    elements: %d vs %d   commands: %d vs %d",
+        tonumber(tr.element_count), tonumber(cr.element_count),
+        tonumber(tr.command_count), tonumber(cr.command_count)))
+    print(string.format("  Streams  rect=%d/%d border=%d/%d text=%d/%d image=%d/%d scissor=%d/%d custom=%d/%d",
+        tonumber(tr.rect_count), tonumber(cr.rect_count),
+        tonumber(tr.border_count), tonumber(cr.border_count),
+        tonumber(tr.text_count), tonumber(cr.text_count),
+        tonumber(tr.image_count), tonumber(cr.image_count),
+        tonumber(tr.scissor_count), tonumber(cr.scissor_count),
+        tonumber(tr.custom_count), tonumber(cr.custom_count)))
+    if tonumber(tr.had_error) ~= 0 or tonumber(cr.had_error) ~= 0 then
+        print(string.format("  Errors   terraui=%d clay=%d", tonumber(tr.had_error), tonumber(cr.had_error)))
+    end
+    print()
 end
