@@ -139,7 +139,63 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 5: public compile entry works and memoizes
+-- Test 5: widget DSL supports local state and named slot sugar
+---------------------------------------------------------------------------
+
+do
+    local split = ui.widget("Split") {
+        state = {
+            ui.state("gap") { type = ui.types.number, initial = 4 },
+        },
+        slots = {
+            ui.widget_slot("left"),
+            ui.widget_slot("right"),
+        },
+        root = ui.row { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+            ui.slot("left"),
+            ui.slot("right"),
+        },
+    }
+
+    local decl = ui.component("named_slots") {
+        widgets = { split },
+        root = ui.column { id = ui.stable("root") } {
+            ui.use("Split") { id = ui.stable("split1") } {
+                left = {
+                    ui.label { text = "L" },
+                },
+                right = {
+                    ui.label { text = "R" },
+                },
+            },
+        },
+    }
+
+    assert(#decl.widgets[1].state == 1)
+    assert(decl.widgets[1].state[1].name == "gap")
+    assert(#decl.root.children == 1)
+    assert(decl.root.children[1].kind == "WidgetChild")
+    assert(#decl.root.children[1].value.slots == 2)
+    assert(decl.root.children[1].value.slots[1].name == "left")
+    assert(decl.root.children[1].value.slots[2].name == "right")
+
+    local k = terraui.compile(decl)
+    local Frame = k:frame_type()
+    local run_q = k.kernels.run_fn
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 200; f.viewport_h = 120
+        [run_q](&f)
+        if f.text_count ~= 2 then return 1 end
+        return 0
+    end
+    assert(test() == 0)
+
+    print("  test 5 (widget state + named slot sugar): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 6: public compile entry works and memoizes
 ---------------------------------------------------------------------------
 
 do
@@ -172,7 +228,7 @@ do
     end
     assert(test() == 0)
 
-    print("  test 5 (public compile entry): ok")
+    print("  test 6 (public compile entry): ok")
 end
 
 ---------------------------------------------------------------------------

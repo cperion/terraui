@@ -288,6 +288,7 @@ Returns `Decl.StateSlot`.
 ```lua
 ui.widget("Card") {
     props = { ... },
+    state = { ... },
     slots = { ... },
     root = ...,
 }
@@ -298,10 +299,14 @@ ui.widget("Card") {
 
 ### Optional fields
 - `props`
+- `state`
 - `slots`
 
 ### Lowering
 Returns `Decl.WidgetDef`.
+
+### State note
+`spec.state` reuses ordinary `ui.state(...)` declarations. During bind, each widget instance expands those declarations into namespaced component state slots.
 
 ## 5.5 `ui.widget_prop(name) { ... }`
 
@@ -340,7 +345,9 @@ ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
 
 ### Notes
 - optional named slot arguments can be passed through `props.slots`
-- the second brace lowers to the conventional `children` slot
+- the second brace may be either:
+  - an ordered child list for the conventional `children` slot
+  - a keyed named-slot table such as `{ left = { ... }, right = { ... } }`
 - `props.id` is an optional widget-instance id override used during bind elaboration
 
 ### Lowering

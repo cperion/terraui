@@ -77,6 +77,43 @@ Pass a frame count and optional `hidden` flag to auto-exit:
 ./examples/sdl_gl_demo 2 hidden
 ```
 
+### Widget example
+
+```lua
+local terraui = require("lib/terraui")
+local ui = terraui.dsl()
+
+local Card = ui.widget("Card") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 8 },
+    },
+    slots = {
+        ui.widget_slot("header"),
+        ui.widget_slot("children"),
+    },
+    root = ui.column { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+        ui.slot("header"),
+        ui.slot("children"),
+    },
+}
+
+local decl = ui.component("demo") {
+    widgets = { Card },
+    root = ui.column { id = ui.stable("root") } {
+        ui.use("Card") { id = ui.stable("inspector") } {
+            header = {
+                ui.label { text = "Inspector" },
+            },
+            children = {
+                ui.label { text = "Body" },
+            },
+        },
+    },
+}
+```
+
+Widget definitions live in `Decl`, but bind elaborates them back into canonical nodes and state slots before planning and compilation.
+
 ### Emit the raw ASDL generated from the DSL
 
 ```bash

@@ -496,6 +496,7 @@ do
     local card = Decl.WidgetDef(
         "Card",
         List{ Decl.WidgetProp("title", Decl.TString, nil) },
+        List(),
         List{ Decl.WidgetSlot("children") },
         node(
             Decl.Stable("root"),
@@ -541,6 +542,61 @@ do
     assert(title_leaf.value.content.v == "Inspector")
 
     print("  test 15 (widget bind elaboration): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 16: widget-local state expands into component state slots
+---------------------------------------------------------------------------
+
+do
+    local meter = Decl.WidgetDef(
+        "Meter",
+        List(),
+        List{ Decl.StateSlot("level", Decl.TNumber, Decl.NumLit(7)) },
+        List(),
+        node(
+            Decl.Stable("root"),
+            no_vis(),
+            Decl.Layout(
+                Decl.Row,
+                Decl.Fit(nil, nil),
+                Decl.Fit(nil, nil),
+                zero_padding(),
+                Decl.StateRef("level"),
+                Decl.AlignLeft,
+                Decl.AlignTop),
+            no_decor(),
+            nil, nil, no_input(), nil, nil,
+            List()))
+
+    local comp = component(
+        "widget_state_bind",
+        List(),
+        List(),
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil, nil,
+            child_list {
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m1"), "Meter", List(), List())),
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m2"), "Meter", List(), List())),
+            }),
+        List{ meter })
+
+    local bound = bind.bind_component(comp)
+    assert(#bound.state == 2)
+    assert(bound.state[1].name == "m1/level")
+    assert(bound.state[1].slot == 0)
+    assert(bound.state[1].initial.kind == "ConstNumber")
+    assert(bound.state[1].initial.v == 7)
+    assert(bound.state[2].name == "m2/level")
+    assert(bound.state[2].slot == 1)
+    assert(bound.root.children[1].layout.gap.kind == "StateSlotRef")
+    assert(bound.root.children[1].layout.gap.slot == 0)
+    assert(bound.root.children[2].layout.gap.kind == "StateSlotRef")
+    assert(bound.root.children[2].layout.gap.slot == 1)
+
+    print("  test 16 (widget local state): ok")
 end
 
 ---------------------------------------------------------------------------

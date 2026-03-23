@@ -178,16 +178,18 @@ Validator rule:
 
 1. Widget names must be unique inside one `Decl.Component`.
 2. Widget prop names must be unique inside one `Decl.WidgetDef`.
-3. Widget slot names must be unique inside one `Decl.WidgetDef`.
-4. `WidgetCall(name, ...)` must refer to an existing widget definition.
-5. Unknown widget props are illegal.
-6. Duplicate widget prop arguments are illegal.
-7. Missing required widget props are illegal.
-8. Unknown widget slots are illegal.
-9. Duplicate widget slot arguments are illegal.
-10. `SlotRef(name)` is only valid while elaborating a widget body.
-11. `WidgetPropRef(name)` is only valid while binding a widget body.
-12. Direct or mutual recursive widget expansion is illegal in v1.
+3. Widget-local state names must be unique inside one `Decl.WidgetDef`.
+4. Widget slot names must be unique inside one `Decl.WidgetDef`.
+5. `WidgetCall(name, ...)` must refer to an existing widget definition.
+6. Unknown widget props are illegal.
+7. Duplicate widget prop arguments are illegal.
+8. Missing required widget props are illegal.
+9. Unknown widget slots are illegal.
+10. Duplicate widget slot arguments are illegal.
+11. `SlotRef(name)` is only valid while elaborating a widget body.
+12. `WidgetPropRef(name)` is only valid while binding a widget body.
+13. `StateRef(name)` inside a widget body may refer to widget-local state first, then component state.
+14. Direct or mutual recursive widget expansion is illegal in v1.
 
 ## 5.4 Layout rules
 

@@ -187,6 +187,49 @@ local function normalize_children(children)
     return out
 end
 
+local function is_named_slot_map(v)
+    if type(v) ~= "table" or v.kind ~= nil or v.__terraui_fragment then return false end
+    local saw_named = false
+    for k, _ in pairs(v) do
+        if type(k) ~= "number" then
+            saw_named = true
+            break
+        end
+    end
+    return saw_named
+end
+
+local function normalize_slot_args(props, children)
+    local slot_args = List()
+
+    local slot_map = props.slots or {}
+    local slot_names = {}
+    for slot_name, _ in pairs(slot_map) do slot_names[#slot_names + 1] = slot_name end
+
+    local child_payload = children
+    if is_named_slot_map(children) then
+        child_payload = nil
+        for slot_name, _ in pairs(children) do slot_names[#slot_names + 1] = slot_name end
+    end
+
+    table.sort(slot_names)
+    local seen = {}
+    for _, slot_name in ipairs(slot_names) do
+        if not seen[slot_name] then
+            seen[slot_name] = true
+            local source = slot_map[slot_name]
+            if source == nil and is_named_slot_map(children) then source = children[slot_name] end
+            slot_args:insert(Decl.SlotArg(slot_name, normalize_children(source)))
+        end
+    end
+
+    if child_payload ~= nil then
+        slot_args:insert(Decl.SlotArg("children", normalize_children(child_payload)))
+    end
+
+    return slot_args
+end
+
 local function make_node(axis, props, leaf, children, defaults)
     props = props or {}
     defaults = defaults or {}
@@ -333,10 +376,12 @@ function M.dsl()
             spec = spec or {}
             local props = List()
             for _, p in ipairs(spec.props or {}) do props:insert(p) end
+            local state = List()
+            for _, s in ipairs(spec.state or {}) do state:insert(s) end
             local slots = List()
             for _, s in ipairs(spec.slots or {}) do slots:insert(s) end
             assert(spec.root and is_decl_node(spec.root), "widget.root must be a Decl.Node")
-            return Decl.WidgetDef(name, props, slots, spec.root)
+            return Decl.WidgetDef(name, props, state, slots, spec.root)
         end
     end
 
@@ -348,17 +393,7 @@ function M.dsl()
         return function(props)
             props = props or {}
             return function(children)
-                local slot_args = List()
-                local slot_map = props.slots or {}
-                local slot_names = {}
-                for slot_name, _ in pairs(slot_map) do slot_names[#slot_names + 1] = slot_name end
-                table.sort(slot_names)
-                for _, slot_name in ipairs(slot_names) do
-                    slot_args:insert(Decl.SlotArg(slot_name, normalize_children(slot_map[slot_name])))
-                end
-                if children ~= nil then
-                    slot_args:insert(Decl.SlotArg("children", normalize_children(children)))
-                end
+                local slot_args = normalize_slot_args(props, children)
 
                 local prop_args = List()
                 local prop_names = {}

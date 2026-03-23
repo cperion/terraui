@@ -13,7 +13,7 @@ module Decl {
          | TVec2
          | TAny
 
-    WidgetDef = (string name, WidgetProp* props, WidgetSlot* slots, Node root)
+    WidgetDef = (string name, WidgetProp* props, StateSlot* state, WidgetSlot* slots, Node root)
 
     WidgetProp = (string name, ValueType ty, Expr? default)
 

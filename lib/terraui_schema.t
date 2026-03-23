@@ -60,6 +60,7 @@ local schema TerraUI
         record WidgetDef
             name: string
             props: WidgetProp*
+            state: StateSlot*
             slots: WidgetSlot*
             root: Node
         end

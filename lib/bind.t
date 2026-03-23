@@ -19,18 +19,19 @@ BindCtx.__index = BindCtx
 function BindCtx.new(opts)
     opts = opts or {}
     return setmetatable({
-        _param_slots    = {},
-        _state_slots    = {},
-        _widget_defs    = {},
-        _next_param     = 0,
-        _next_state     = 0,
-        _next_node_id   = 0,
-        _next_widget_id = 0,
-        _path_stack     = {},
-        _widget_frames  = {},
-        _override_ids   = {},
-        _renderer       = opts.renderer or "default",
-        _text_backend   = opts.text_backend or "default",
+        _param_slots       = {},
+        _state_slots       = {},
+        _widget_defs       = {},
+        _bound_widget_state = nil,
+        _next_param        = 0,
+        _next_state        = 0,
+        _next_node_id      = 0,
+        _next_widget_id    = 0,
+        _path_stack        = {},
+        _widget_frames     = {},
+        _override_ids      = {},
+        _renderer          = opts.renderer or "default",
+        _text_backend      = opts.text_backend or "default",
     }, BindCtx)
 end
 
@@ -57,6 +58,10 @@ function BindCtx:param_slot(name)
 end
 
 function BindCtx:state_slot(name)
+    local frame = self:current_widget_frame()
+    if frame and frame.local_state_slots[name] ~= nil then
+        return frame.local_state_slots[name]
+    end
     local slot = self._state_slots[name]
     if slot == nil then error("unknown state: " .. name) end
     return slot
@@ -145,6 +150,13 @@ function BindCtx:resolve_slot_children(name)
         error("unknown widget slot: " .. name)
     end
     return children
+end
+
+function BindCtx:register_widget_state_decl(scope, decl_state)
+    local scoped_name = scope .. "/" .. decl_state.name
+    self:register_state(scoped_name)
+    local slot = self._state_slots[scoped_name]
+    return scoped_name, slot
 end
 
 function BindCtx:push_path(segment)
@@ -519,6 +531,14 @@ function BindCtx:bind_widget_call(call)
     end
     slot_defs.children = slot_defs.children or false
 
+    local state_defs = {}
+    for _, s in ipairs(def.state) do
+        if state_defs[s.name] ~= nil then
+            error("duplicate widget state in def " .. def.name .. ": " .. s.name)
+        end
+        state_defs[s.name] = s
+    end
+
     local props = {}
     for _, arg in ipairs(call.props) do
         if props[arg.name] ~= nil then
@@ -555,16 +575,35 @@ function BindCtx:bind_widget_call(call)
         slots[arg.name] = arg.children
     end
 
+    local scope = widget_scope_from_id(call, self)
+    local local_state_slots = {}
+    local local_state_names = {}
+    for _, s in ipairs(def.state) do
+        local scoped_name, slot = self:register_widget_state_decl(scope, s)
+        local_state_slots[s.name] = slot
+        local_state_names[s.name] = scoped_name
+    end
+
     if call.id ~= nil then
         self:push_override_id(call.id)
     end
-    self:push_widget_frame({
+
+    local frame = {
         name = call.name,
-        scope = widget_scope_from_id(call, self),
+        scope = scope,
         props = props,
         slots = slots,
+        local_state_slots = local_state_slots,
+        local_state_names = local_state_names,
         _resolving = {},
-    })
+    }
+
+    self:push_widget_frame(frame)
+    for _, s in ipairs(def.state) do
+        local initial = s.initial and s.initial:bind(self) or nil
+        self._bound_widget_state:insert(Bound.StateSlot(
+            local_state_names[s.name], s.ty, local_state_slots[s.name], initial))
+    end
     local bound = def.root:bind(self)
     self:pop_widget_frame()
     return bound
@@ -621,6 +660,7 @@ end
 
 function Decl.Component:bind(ctx)
     -- Register slots before binding anything
+    ctx._bound_widget_state = List()
     for _, p in ipairs(self.params) do ctx:register_param(p.name) end
     for _, s in ipairs(self.state) do ctx:register_state(s.name) end
     for _, w in ipairs(self.widgets) do ctx:register_widget(w) end
@@ -636,6 +676,9 @@ function Decl.Component:bind(ctx)
     end
 
     local bound_root = self.root:bind(ctx)
+    for _, s in ipairs(ctx._bound_widget_state) do
+        bound_state:insert(s)
+    end
 
     local key = Bound.SpecializationKey(
         ctx._renderer,

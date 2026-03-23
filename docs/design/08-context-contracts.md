@@ -126,10 +126,12 @@ Return the deterministic slot index for a state slot name.
 
 ### Required behavior
 - same name inside same component bind pass -> same slot
+- inside widget elaboration, widget-local state names shadow outer component state names
 - unknown name -> fail clearly
 
 ### Must guarantee
-- slot numbering is stable in declaration order
+- slot numbering is stable in declaration order for component state
+- widget-local state slot numbering is stable in widget-expansion order
 
 ## 4.5 `resolve_theme(name) -> any`
 

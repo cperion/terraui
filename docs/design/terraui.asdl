@@ -60,6 +60,7 @@ module Decl {
     WidgetDef = (
         string name,
         Decl.WidgetProp* props,
+        Decl.StateSlot* state,
         Decl.WidgetSlot* slots,
         Decl.Node root
     )

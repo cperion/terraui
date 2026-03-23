@@ -293,31 +293,42 @@ Lower to:
 
 ### Widget declarations and calls
 ```lua
-local Card = ui.widget("Card") {
-    props = {
-        ui.widget_prop("title") { type = ui.types.string },
+local Split = ui.widget("Split") {
+    state = {
+        ui.state("gap") { type = ui.types.number, initial = 4 },
     },
     slots = {
-        ui.widget_slot("children"),
+        ui.widget_slot("left"),
+        ui.widget_slot("right"),
     },
-    root = ui.column { id = ui.stable("root") } {
-        ui.label { id = ui.stable("title"), text = ui.prop_ref("title") },
-        ui.slot("children"),
+    root = ui.row { id = ui.stable("root"), gap = ui.state_ref("gap") } {
+        ui.slot("left"),
+        ui.slot("right"),
     },
 }
 
-ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
-    ui.label { text = "Body" },
+ui.use("Split") { id = ui.stable("split1") } {
+    left = {
+        ui.label { text = "Layers" },
+    },
+    right = {
+        ui.label { text = "Preview" },
+    },
 }
 ```
 
 Lowering notes:
 - `ui.widget(...)` returns `Decl.WidgetDef`
+- widget `spec.state` reuses ordinary `ui.state(...)` declarations and becomes widget-local state during bind elaboration
 - `ui.widget_prop(...)` returns `Decl.WidgetProp`
 - `ui.widget_slot(...)` returns `Decl.WidgetSlot`
 - `ui.use(...)` returns `Decl.WidgetCall`
 - `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
+- `ui.state_ref(name)` inside a widget body resolves widget-local state first, then outer component state
+- the second brace on `ui.use(...)` may be either:
+  - an ordered child list for the default `children` slot
+  - a keyed named-slot table such as `{ left = {...}, right = {...} }`
 - widget calls are elaborated away during bind
 
 ## 9. Structural combinators

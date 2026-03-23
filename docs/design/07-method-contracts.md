@@ -157,10 +157,11 @@ Bind the full authored component into a canonical `Bound.Component`.
 ### Required behavior
 
 - bind params in stable declaration order
-- bind state in stable declaration order
+- bind component-level state in stable declaration order
 - register widget definitions in stable declaration order
 - bind the root node
 - elaborate widget calls away during binding
+- expand widget-local state into deterministic component state slots during elaboration
 - construct `Bound.SpecializationKey`
 - return a fully resolved `Bound.Component`
 
