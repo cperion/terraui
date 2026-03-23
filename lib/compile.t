@@ -252,6 +252,42 @@ local function text_align_code(align)
     return TEXT_ALIGN_LEFT
 end
 
+local ApproxTextMeasurer = { key = "approx-v1" }
+
+function ApproxTextMeasurer:measure_width(ctx, spec)
+    local content = spec.content:compile_string(ctx)
+    local font_size = spec.font_size:compile_number(ctx)
+    local letter_spacing = spec.letter_spacing:compile_number(ctx)
+    return `approx_text_max_explicit_line_width([content], [font_size], [letter_spacing])
+end
+
+function ApproxTextMeasurer:measure_height_for_width(ctx, spec, max_width)
+    local content = spec.content:compile_string(ctx)
+    local font_size = spec.font_size:compile_number(ctx)
+    local letter_spacing = spec.letter_spacing:compile_number(ctx)
+    local line_height = spec.line_height:compile_number(ctx)
+
+    local line_count
+    if spec.wrap == Decl.WrapWords then
+        line_count = `approx_text_wrapped_line_count([content], [max_width], [font_size], [letter_spacing])
+    elseif spec.wrap == Decl.WrapNewlines then
+        line_count = `approx_text_explicit_line_count([content])
+    else
+        line_count = `1
+    end
+
+    return `[float]([line_count]) * [font_size] * [line_height]
+end
+
+local function text_measurer_key(measurer)
+    if type(measurer) == "table" and measurer.key ~= nil then
+        return tostring(measurer.key)
+    elseif measurer ~= nil then
+        return tostring(measurer)
+    end
+    return tostring(ApproxTextMeasurer.key)
+end
+
 ---------------------------------------------------------------------------
 -- CompileCtx
 ---------------------------------------------------------------------------
@@ -259,9 +295,14 @@ end
 local CompileCtx = {}
 CompileCtx.__index = CompileCtx
 
-function CompileCtx.new(plan_component)
+function CompileCtx.new(plan_component, opts)
+    opts = opts or {}
     local pc  = plan_component
     local key = pc.key
+    local text_measurer = opts.text_measurer or ApproxTextMeasurer
+    assert(type(text_measurer) == "table", "compile.text_measurer must be a table")
+    assert(type(text_measurer.measure_width) == "function", "compile.text_measurer.measure_width required")
+    assert(type(text_measurer.measure_height_for_width) == "function", "compile.text_measurer.measure_height_for_width required")
 
     local params_t = terralib.types.newstruct("Params")
     for _, p in ipairs(key.params) do
@@ -348,7 +389,16 @@ function CompileCtx.new(plan_component)
         frame_t         = frame_t,
         node_count      = node_count,
         frame_sym       = frame_sym,
+        text_measurer   = text_measurer,
     }, CompileCtx)
+end
+
+function CompileCtx:measure_text_width(spec)
+    return self.text_measurer:measure_width(self, spec)
+end
+
+function CompileCtx:measure_text_height_for_width(spec, max_width)
+    return self.text_measurer:measure_height_for_width(self, spec, max_width)
 end
 
 ---------------------------------------------------------------------------
@@ -1189,28 +1239,11 @@ function Plan.ClipSpec:compile_emit_end(ctx)
 end
 
 function Plan.TextSpec:compile_measure_width(ctx)
-    local content = self.content:compile_string(ctx)
-    local font_size = self.font_size:compile_number(ctx)
-    local letter_spacing = self.letter_spacing:compile_number(ctx)
-    return `approx_text_max_explicit_line_width([content], [font_size], [letter_spacing])
+    return ctx:measure_text_width(self)
 end
 
 function Plan.TextSpec:compile_measure_height_for_width(ctx, max_width)
-    local content = self.content:compile_string(ctx)
-    local font_size = self.font_size:compile_number(ctx)
-    local letter_spacing = self.letter_spacing:compile_number(ctx)
-    local line_height = self.line_height:compile_number(ctx)
-
-    local line_count
-    if self.wrap == Decl.WrapWords then
-        line_count = `approx_text_wrapped_line_count([content], [max_width], [font_size], [letter_spacing])
-    elseif self.wrap == Decl.WrapNewlines then
-        line_count = `approx_text_explicit_line_count([content])
-    else
-        line_count = `1
-    end
-
-    return `[float]([line_count]) * [font_size] * [line_height]
+    return ctx:measure_text_height_for_width(self, max_width)
 end
 
 function Plan.TextSpec:compile_emit(ctx)
@@ -1600,6 +1633,8 @@ local M = {}
 M.CompileCtx = CompileCtx
 M.Color      = Color
 M.Vec2       = Vec2
+M.default_text_measurer = ApproxTextMeasurer
+M.text_measurer_key = text_measurer_key
 M.NodeState  = NodeState
 M.NodeRect   = NodeState -- compatibility alias with earlier tests/notes
 M.RectCmd    = RectCmd
@@ -1615,8 +1650,8 @@ M.TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT
 M.TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER
 M.TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT
 
-function M.compile_component(plan_component)
-    local ctx = CompileCtx.new(plan_component)
+function M.compile_component(plan_component, opts)
+    local ctx = CompileCtx.new(plan_component, opts)
     return plan_component:compile(ctx)
 end
 

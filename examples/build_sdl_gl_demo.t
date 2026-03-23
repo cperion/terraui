@@ -577,9 +577,89 @@ local decl = ui.component("sdl_gl_demo") {
     },
 }
 
+terra measure_demo_text_width(text: rawstring, font_size: float, align: int32) : float
+    if text == nil then return 0 end
+    var font = C.TTF_OpenFont([font_path], font_size)
+    if font == nil then return 0 end
+
+    if align == compile.TEXT_ALIGN_CENTER then
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_CENTER)
+    elseif align == compile.TEXT_ALIGN_RIGHT then
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_RIGHT)
+    else
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_LEFT)
+    end
+
+    var w: int32 = 0
+    var h: int32 = 0
+    var ok = C.TTF_GetStringSize(font, text, C.strlen(text), &w, &h)
+    C.TTF_CloseFont(font)
+    if not ok then return 0 end
+    return [float](w)
+end
+
+terra measure_demo_text_height_for_width(text: rawstring, font_size: float, wrap: int32, align: int32, max_width: float) : float
+    if text == nil then return 0 end
+    var font = C.TTF_OpenFont([font_path], font_size)
+    if font == nil then return 0 end
+
+    if align == compile.TEXT_ALIGN_CENTER then
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_CENTER)
+    elseif align == compile.TEXT_ALIGN_RIGHT then
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_RIGHT)
+    else
+        C.TTF_SetFontWrapAlignment(font, C.TTF_HORIZONTAL_ALIGN_LEFT)
+    end
+
+    var wrap_w = [int32](max_width)
+    if wrap_w < 1 then wrap_w = 1 end
+
+    var w: int32 = 0
+    var h: int32 = 0
+    var ok: bool
+    if wrap == compile.TEXT_WRAP_WORDS then
+        ok = C.TTF_GetStringSizeWrapped(font, text, C.strlen(text), wrap_w, &w, &h)
+    elseif wrap == compile.TEXT_WRAP_NEWLINES then
+        ok = C.TTF_GetStringSizeWrapped(font, text, C.strlen(text), 1000000, &w, &h)
+    else
+        ok = C.TTF_GetStringSize(font, text, C.strlen(text), &w, &h)
+    end
+    C.TTF_CloseFont(font)
+    if not ok then return 0 end
+    return [float](h)
+end
+
+local demo_text_measurer = { key = "sdl-ttf:" .. font_path }
+function demo_text_measurer:measure_width(ctx, spec)
+    local align = compile.TEXT_ALIGN_LEFT
+    if spec.align == terraui.types.Decl.TextAlignCenter then
+        align = compile.TEXT_ALIGN_CENTER
+    elseif spec.align == terraui.types.Decl.TextAlignRight then
+        align = compile.TEXT_ALIGN_RIGHT
+    end
+    return `measure_demo_text_width([spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [align])
+end
+function demo_text_measurer:measure_height_for_width(ctx, spec, max_width)
+    local wrap = compile.TEXT_WRAP_NONE
+    if spec.wrap == terraui.types.Decl.WrapWords then
+        wrap = compile.TEXT_WRAP_WORDS
+    elseif spec.wrap == terraui.types.Decl.WrapNewlines then
+        wrap = compile.TEXT_WRAP_NEWLINES
+    end
+
+    local align = compile.TEXT_ALIGN_LEFT
+    if spec.align == terraui.types.Decl.TextAlignCenter then
+        align = compile.TEXT_ALIGN_CENTER
+    elseif spec.align == terraui.types.Decl.TextAlignRight then
+        align = compile.TEXT_ALIGN_RIGHT
+    end
+
+    return `measure_demo_text_height_for_width([spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [wrap], [align], [max_width])
+end
+
 local bound = bind.bind_component(decl)
 local planned = plan.plan_component(bound)
-local kernel = compile.compile_component(planned)
+local kernel = compile.compile_component(planned, { text_measurer = demo_text_measurer })
 local Frame = kernel:frame_type()
 local init_q = kernel.kernels.init_fn
 local run_q = kernel.kernels.run_fn

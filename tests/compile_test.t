@@ -77,10 +77,10 @@ local function make_label(name, text, font_size, wrap, width)
         List())
 end
 
-local function full_pipeline(decl_comp)
+local function full_pipeline(decl_comp, compile_opts)
     local b = bind.bind_component(decl_comp)
     local p = plan.plan_component(b)
-    return compile.compile_component(p)
+    return compile.compile_component(p, compile_opts)
 end
 
 ---------------------------------------------------------------------------
@@ -1130,6 +1130,55 @@ do
 
     assert(test() == 0, "test 24 failed at " .. tostring(test()))
     print("  test 24 (disabled guard): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 25: custom text measurer plugs into CompileCtx
+---------------------------------------------------------------------------
+
+do
+    local custom_measurer = { key = "test-measurer-v1" }
+    function custom_measurer:measure_width(ctx, spec)
+        return `200.0f
+    end
+    function custom_measurer:measure_height_for_width(ctx, spec, max_width)
+        return `[max_width] + 7.0f
+    end
+
+    local k = full_pipeline(component(
+        "custom_text_measurer", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+            nil, nil,
+            List{
+                node(
+                    Decl.Stable("panel"), no_vis(),
+                    Decl.Layout(Decl.Column,
+                        Decl.Fixed(Decl.NumLit(30)), Decl.Fit(nil, nil),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(), nil, nil,
+                    List{
+                        make_label("lbl", "Hello world", 10, Decl.WrapWords, Decl.Grow(nil, nil)),
+                    }),
+            })),
+        { text_measurer = custom_measurer })
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 800; f.viewport_h = 600
+        [layout_q](&f)
+        if f.nodes[2].w ~= 30 then return 1 end
+        if f.nodes[2].h ~= 37 then return 2 end
+        if f.nodes[1].h ~= 37 then return 3 end
+        return 0
+    end
+
+    assert(test() == 0, "test 25 failed at " .. tostring(test()))
+    print("  test 25 (custom text measurer): ok")
 end
 
 ---------------------------------------------------------------------------

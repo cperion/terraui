@@ -711,7 +711,7 @@ Generate the intrinsic max-content width measurement logic for one text leaf.
 
 ### Current implementation note
 
-The current implementation uses a placeholder metric based on average character advance. It still treats text measurement as a kernel concern, but now splits width from height-for-width so wrapped text can participate in layout honestly.
+The current implementation delegates width measurement through `CompileCtx.text_measurer`. The bundled default measurer still uses a placeholder average-advance metric, but the compiler core no longer hardcodes that policy.
 
 ## 6.11 `Plan.TextSpec:compile_measure_height_for_width(CompileCtx, TerraQuote max_width) -> TerraQuote`
 
@@ -728,7 +728,7 @@ Generate height-for-width measurement logic for one text leaf under a concrete w
 
 ### Current implementation note
 
-The current implementation uses a placeholder average-character metric and a simple word-wrapping approximation. That is enough to validate layout and demo behavior, but it is not yet the final text-backend contract described elsewhere in the docs.
+The current implementation delegates height-for-width measurement through `CompileCtx.text_measurer`. The bundled default measurer still uses a simple approximation, while the SDL demo now installs an SDL_ttf-backed measurer so layout and replay share the same text backend there.
 
 ## 6.12 `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
 

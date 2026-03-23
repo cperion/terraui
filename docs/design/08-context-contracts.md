@@ -357,9 +357,8 @@ The current `lib/compile.t` implementation already provides:
 - layout, hit, input, and emit function generation
 
 Still intentionally partial:
-- no separate backend object yet
-- text measurement is still placeholder logic rather than a real font backend hook
 - command constructor/layout APIs are currently encoded directly in `lib/compile.t` rather than exposed as a fully factored backend surface
+- the default bundled text measurer is still an approximate backend, but it now sits behind the same pluggable `CompileCtx.text_measurer` contract as real backends
 
 ## 6.2 CompileCtx contract surface
 
@@ -393,15 +392,11 @@ CompileCtx = {
     color_literal     = function(self, r, g, b, a) -> TerraQuote end,
     vec2_literal      = function(self, x, y) -> TerraQuote end,
 
-    measure_text      = function(self,
-                                 text_q,
-                                 font_id_q,
-                                 font_size_q,
-                                 letter_spacing_q,
-                                 line_height_q,
-                                 wrap_mode,
-                                 text_align,
-                                 max_width_q) -> TerraQuote end,
+    text_measurer = {
+        key = string,
+        measure_width = function(self, ctx, text_spec) -> TerraQuote end,
+        measure_height_for_width = function(self, ctx, text_spec, max_width_q) -> TerraQuote end,
+    },
 
     make_rect_cmd       = function(self, ...) -> TerraQuote end,
     make_border_cmd     = function(self, ...) -> TerraQuote end,
@@ -422,6 +417,7 @@ CompileCtx = {
 
 The current implementation has the same overall role, but a narrower concrete shape:
 - most services are implemented as direct methods/helpers inside `lib/compile.t`
+- text measurement is now factored through `CompileCtx.text_measurer`
 - command structs are synthesized directly rather than via a fully abstract backend callback layer
 - the future fully-factored backend surface above is still the intended long-term contract
 
@@ -509,22 +505,24 @@ Provide backend-compatible literal construction helpers.
 - output types match backend runtime types
 - literals are deterministic and pure
 
-## 6.7 Text measurement method
+## 6.7 Text measurement service
 
-### `measure_text(...) -> TerraQuote`
+### `text_measurer.measure_width(ctx, text_spec) -> TerraQuote`
+### `text_measurer.measure_height_for_width(ctx, text_spec, max_width_q) -> TerraQuote`
 
 ### Purpose
 Provide Terra-visible text measurement support during code generation.
 
 ### Required behavior
 - reflect the active text backend contract
-- support width/height measurement needs of layout
-- support height-for-width measurement via `max_width_q`
+- support both max-content width and height-for-width measurement
 - respect wrap/alignment/font settings
+- allow multiple measurer implementations to specialize compilation without changing the canonical IR
 
 ### Must guarantee
-- returned quote is usable in layout code
+- returned quotes are usable in layout code
 - text shaping still remains outside the kernel for v1
+- equal measurer identity should produce stable compile memoization keys
 
 ## 6.8 Command constructor methods
 

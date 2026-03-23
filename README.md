@@ -34,6 +34,8 @@ This repository currently contains:
 
 The repository now includes a runnable AOT demo path: Terra is used as the compiler, and the produced executable runs SDL3 + OpenGL directly.
 
+Text wrapping is modeled at the TerraUI level and measured through a pluggable compile-time `text_measurer` service. The default measurer is approximate; the SDL demo installs an SDL_ttf-backed measurer so wrapped layout and wrapped rendering use the same backend.
+
 ## Repository layout
 
 - `lib/schema.t` — Terra language extension for schema/ASDL authoring
@@ -162,6 +164,19 @@ make check
 ```bash
 make check FILE=/tmp/terraui.asdl
 ```
+
+You can also compile with a custom text measurer:
+
+```lua
+local kernel = terraui.compile(decl, {
+    text_measurer = my_text_measurer,
+})
+```
+
+A text measurer is a Lua table with:
+- `key`
+- `measure_width(ctx, text_spec)`
+- `measure_height_for_width(ctx, text_spec, max_width_q)`
 
 You can still invoke the Terra tools directly if you prefer:
 

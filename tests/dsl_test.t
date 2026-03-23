@@ -285,10 +285,22 @@ do
         },
     }
 
+    local custom_measurer = { key = "dsl-test-measurer" }
+    function custom_measurer:measure_width(ctx, spec)
+        return `42.0f
+    end
+    function custom_measurer:measure_height_for_width(ctx, spec, max_width)
+        return `17.0f
+    end
+
     local k1 = terraui.compile(decl)
     local k2 = terraui.compile(decl)
+    local k3 = terraui.compile(decl, { text_measurer = custom_measurer })
+    local k4 = terraui.compile(decl, { text_measurer = custom_measurer })
 
     assert(k1 == k2)
+    assert(k3 == k4)
+    assert(k1 ~= k3)
     assert(terralib.types.istype(k1:frame_type()))
 
     local Frame = k1:frame_type()

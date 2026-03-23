@@ -13,8 +13,8 @@ local direct_c_backend = require("lib/direct_c_backend")
 local plan_registry = {}
 
 local compile_plan_memo = terralib.memoize(function(sig)
-    local plan_component = assert(plan_registry[sig], "missing plan for specialization key")
-    return compile.compile_component(plan_component)
+    local entry = assert(plan_registry[sig], "missing plan for specialization key")
+    return compile.compile_component(entry.plan_component, entry.compile_opts)
 end)
 
 local M = {}
@@ -34,17 +34,21 @@ function M.plan(bound_component)
     return plan.plan_component(bound_component)
 end
 
-function M.compile_plan(plan_component)
-    local sig = tostring(plan_component.key)
-    plan_registry[sig] = plan_component
+local function compile_sig(plan_component, opts)
+    return tostring(plan_component.key) .. "|text=" .. compile.text_measurer_key(opts and opts.text_measurer)
+end
+
+function M.compile_plan(plan_component, opts)
+    local sig = compile_sig(plan_component, opts)
+    plan_registry[sig] = { plan_component = plan_component, compile_opts = opts }
     return compile_plan_memo(sig)
 end
 
 function M.compile(decl_component, opts)
     local bound_component = bind.bind_component(decl_component, opts)
     local plan_component = plan.plan_component(bound_component)
-    local sig = tostring(plan_component.key)
-    plan_registry[sig] = plan_component
+    local sig = compile_sig(plan_component, opts)
+    plan_registry[sig] = { plan_component = plan_component, compile_opts = opts }
     return compile_plan_memo(sig)
 end
 
