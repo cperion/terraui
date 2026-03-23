@@ -14,3 +14,4 @@ terra tests/dsl_test.t
 terra tests/presenter_test.t
 terra tests/opengl_backend_test.t
 terra tests/direct_c_backend_test.t
+./tests/aot_demo_smoke.sh

@@ -2,7 +2,7 @@ TERRA ?= terra
 OUT ?=
 SNAPSHOT ?= generated/terraui-runtime.asdl
 
-.PHONY: help test asdl snapshot check
+.PHONY: help test asdl snapshot check demo demo-smoke
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make snapshot             - refresh the checked-in ASDL snapshot"
 	@echo "  make check FILE=path      - compare emitted TerraUI ASDL with FILE"
 	@echo "  make check                - compare emitted TerraUI ASDL with the default snapshot"
+	@echo "  make demo                 - build the AOT SDL+OpenGL demo executable"
+	@echo "  make demo-smoke           - build and smoke-run the demo hidden for 2 frames"
 
 test:
 	./tools/run_tests.sh
@@ -29,3 +31,10 @@ snapshot:
 
 check:
 	$(TERRA) tools/emit_terraui_asdl.t --check $(if $(FILE),$(FILE),$(SNAPSHOT))
+
+demo:
+	@mkdir -p examples
+	$(TERRA) examples/build_sdl_gl_demo.t examples/sdl_gl_demo
+
+demo-smoke:
+	./tests/aot_demo_smoke.sh

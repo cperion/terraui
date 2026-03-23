@@ -7,12 +7,22 @@ Compiler-backed immediate-mode UI design + early schema tooling for Terra.
 This repository currently contains:
 
 - the split TerraUI architecture/design docs in `docs/design/`
-- a working Terra language extension for validated ASDL authoring in `lib/schema.t`
-- the TerraUI schema written in that DSL in `lib/terraui_schema.t`
-- an emitter/check tool for the generated raw ASDL in `tools/emit_terraui_asdl.t`
-- smoke/validation tests in `tests/`
+- the validated ASDL schema DSL in `lib/schema.t`
+- the TerraUI schema in `lib/terraui_schema.t`
+- the working compiler pipeline in:
+  - `lib/bind.t`
+  - `lib/plan.t`
+  - `lib/compile.t`
+  - `lib/dsl.t`
+  - `lib/terraui.t`
+- CPU-side presenter and backend replay helpers in:
+  - `lib/presenter.t`
+  - `lib/opengl_backend.t`
+  - `lib/direct_c_backend.t`
+- an ahead-of-time SDL+OpenGL demo builder in `examples/build_sdl_gl_demo.t`
+- tests in `tests/`
 
-This is still an early design-and-infrastructure repository. The first implemented code is the **schema DSL**, not the UI runtime/compiler yet.
+The repository now includes a runnable AOT demo path: Terra is used as the compiler, and the produced executable runs SDL3 + OpenGL directly.
 
 ## Repository layout
 
@@ -32,6 +42,33 @@ This is still an early design-and-infrastructure repository. The first implement
 
 ```bash
 make test
+```
+
+### Build the SDL+OpenGL AOT demo
+
+```bash
+make demo
+./examples/sdl_gl_demo
+```
+
+To smoke-run it headlessly enough for CI/local verification:
+
+```bash
+make demo-smoke
+```
+
+You can also build to a custom output path:
+
+```bash
+terra examples/build_sdl_gl_demo.t /tmp/terraui_demo
+/tmp/terraui_demo
+```
+
+Pass a frame count and optional `hidden` flag to auto-exit:
+
+```bash
+./examples/sdl_gl_demo 120
+./examples/sdl_gl_demo 2 hidden
 ```
 
 ### Emit the raw ASDL generated from the DSL
