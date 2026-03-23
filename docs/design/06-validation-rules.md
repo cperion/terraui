@@ -1,7 +1,9 @@
 # TerraUI Validation Rules
 
-Status: draft v0.3  
+Status: draft v0.4  
 Purpose: define the validation rules that accompany `docs/design/terraui.asdl`.
+
+Implementation note: the canonical design now separates `Clip` from `Scroll`. The current implementation still validates and lowers the older clip-plus-offset scroll model until migrated.
 
 ## Canonical schema
 
@@ -55,6 +57,7 @@ The following declarations in `terraui.asdl` are not comments or hints. They are
 - `Decl.Border:bind(BindCtx) -> Bound.Border`
 - `Decl.CornerRadius:bind(BindCtx) -> Bound.CornerRadius`
 - `Decl.Clip:bind(BindCtx) -> Bound.Clip`
+- `Decl.Scroll:bind(BindCtx) -> Bound.Scroll`
 - `Decl.Floating:bind(BindCtx) -> Bound.Floating`
 - `Decl.Input:bind(BindCtx) -> Bound.Input`
 - `Decl.Leaf:bind(BindCtx) -> Bound.Leaf`
@@ -67,6 +70,7 @@ The following declarations in `terraui.asdl` are not comments or hints. They are
 - `Bound.Node:plan(PlanCtx, number) -> number`
 - `Bound.Size:plan(PlanCtx) -> Plan.SizeRule`
 - `Bound.Clip:plan(PlanCtx, number) -> number`
+- `Bound.Scroll:plan(PlanCtx, number) -> number`
 - `Bound.Leaf:plan(PlanCtx, number) -> Plan.LeafSlots`
 - `Bound.Value:plan_binding(PlanCtx) -> Plan.Binding`
 - `Plan.Component:compile(CompileCtx) -> Kernel.Component`
@@ -78,6 +82,8 @@ The following declarations in `terraui.asdl` are not comments or hints. They are
 - `Plan.ClipSpec:compile_apply(CompileCtx) -> TerraQuote`
 - `Plan.ClipSpec:compile_emit_begin(CompileCtx) -> TerraQuote`
 - `Plan.ClipSpec:compile_emit_end(CompileCtx) -> TerraQuote`
+- `Plan.ScrollSpec:compile_apply(CompileCtx) -> TerraQuote`
+- `Plan.ScrollSpec:compile_input(CompileCtx) -> TerraQuote`
 - `Plan.TextSpec:compile_measure_width(CompileCtx) -> TerraQuote`
 - `Plan.TextSpec:compile_measure_height_for_width(CompileCtx, TerraQuote) -> TerraQuote`
 - `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
@@ -207,10 +213,12 @@ Validator rule:
 2. Constant corner radii should be `>= 0`.
 3. Constant border thickness values should be `>= 0`.
 
-## 5.6 Clip rules
+## 5.6 Clip and scroll rules
 
-1. `Clip(horizontal=false, vertical=false, ...)` is meaningless and should be rejected or warned.
-2. Constant child offsets are allowed, but their semantics are clip/scroll offsets, not layout origin changes.
+1. `Clip(horizontal=false, vertical=false)` is meaningless and should be rejected or warned.
+2. `Scroll(horizontal=false, vertical=false)` is meaningless and should be rejected.
+3. Scroll offsets are runtime-managed; authored structural scroll declarations should not carry `scroll_x` / `scroll_y` expressions.
+4. If a node carries both explicit `Clip` and `Scroll`, effective clip is the union of enabled axes.
 
 ## 5.7 Floating rules
 
@@ -275,14 +283,16 @@ Validator rule:
 ## 7.2 Slot reference rules
 
 1. Required slots (`guard_slot`, `paint_slot`, `input_slot`) must always refer to valid table entries.
-2. Optional slots (`clip_slot`, `text_slot`, `image_slot`, `custom_slot`, `float_slot`) must either be absent or point to valid entries.
+2. Optional slots (`clip_slot`, `scroll_slot`, `text_slot`, `image_slot`, `custom_slot`, `float_slot`) must either be absent or point to valid entries.
 3. `LeafSlots` must be mutually exclusive in v1.
 
-## 7.3 Clip rules
+## 7.3 Clip and scroll rules
 
 1. `ClipSpec.node_index` must refer to the node owning the clip.
-2. Clip begin/end must bracket the full subtree of that node.
-3. Child offsets affect child coordinate space, not the parent box itself.
+2. `ScrollSpec.node_index` must refer to the node owning the scroll viewport.
+3. Clip begin/end must bracket the full subtree of the clipped node.
+4. Scrolling is not represented as clip child offsets; scroll translation is owned by `ScrollSpec`.
+5. Scroll range must be derived from content extent versus viewport size.
 
 ## 7.4 Float rules
 
@@ -333,7 +343,7 @@ A `CompileCtx` implementation must provide:
 - intrinsic lowering methods
 - command constructor methods
 - text measurement support
-- optional scroll helpers if runtime-managed scroll is enabled
+- runtime scroll helpers when scroll viewports are enabled
 
 ## 9.2 OpenGL/backend rules
 

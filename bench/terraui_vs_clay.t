@@ -99,7 +99,7 @@ local function make_nested_panels_decl(name, group_count)
         local cards = {}
         for i = 0, 5 do
             cards[#cards + 1] = ui.column {
-                key = ui.indexed("card", g * 16 + i),
+                key = ui.stable("card_" .. g .. "_" .. i),
                 width = ui.grow(),
                 height = ui.fit(),
                 padding = 6,

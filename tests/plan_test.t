@@ -62,7 +62,7 @@ local function component(name, params, state, root, widgets)
 end
 
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 
 local function make_label(name, text)
@@ -246,31 +246,38 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 5: clip
+-- Test 5: clip + scroll side tables
 ---------------------------------------------------------------------------
 
 do
     local comp = component(
         "cliptest", List(), List(),
-        node(
+        Decl.Node(
             Decl.Stable("root"), no_vis(), fit_layout(), no_decor(),
-            Decl.Clip(true, false, Decl.NumLit(10), nil),
+            Decl.Clip(true, false),
+            Decl.Scroll(false, true),
+            nil,
             nil, no_input(), nil, nil, List()))
 
     local p = bind_and_plan(comp)
 
     assert(#p.clips == 1)
+    assert(#p.scrolls == 1)
+
     local cs = p.clips[1]
     assert(cs.node_index == 0)
     assert(cs.horizontal == true)
-    assert(cs.vertical == false)
-    assert(cs.child_offset_x.kind == "ConstNumber")
-    assert(cs.child_offset_x.v == 10)
-    assert(cs.child_offset_y == nil)
+    assert(cs.vertical == true)
+
+    local ss = p.scrolls[1]
+    assert(ss.node_index == 0)
+    assert(ss.horizontal == false)
+    assert(ss.vertical == true)
 
     assert(p.nodes[1].clip_slot == 0)
+    assert(p.nodes[1].scroll_slot == 0)
 
-    print("  test 5 (clip): ok")
+    print("  test 5 (clip + scroll side tables): ok")
 end
 
 ---------------------------------------------------------------------------

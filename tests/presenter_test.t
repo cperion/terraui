@@ -76,8 +76,6 @@ do
             height = ui.fixed(50),
             horizontal = true,
             vertical = true,
-            scroll_x = 5,
-            scroll_y = 7,
             background = ui.rgba(0.1, 0.1, 0.1, 1),
         } {
             ui.label { text = "Inside" },

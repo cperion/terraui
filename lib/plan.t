@@ -24,6 +24,8 @@ function PlanCtx.new()
         _paints        = List(),
         _inputs        = List(),
         _clips         = List(),
+        _scrolls       = List(),
+        _scroll_controls = List(),
         _texts         = List(),
         _images        = List(),
         _customs       = List(),
@@ -69,6 +71,18 @@ end
 function PlanCtx:add_clip(clip)
     local slot = #self._clips
     self._clips:insert(clip)
+    return slot
+end
+
+function PlanCtx:add_scroll(scroll)
+    local slot = #self._scrolls
+    self._scrolls:insert(scroll)
+    return slot
+end
+
+function PlanCtx:add_scroll_control(spec)
+    local slot = #self._scroll_controls
+    self._scroll_controls:insert(spec)
     return slot
 end
 
@@ -123,7 +137,7 @@ function PlanCtx:finish_component(key, root_index)
     return Plan.Component(
         key, nodes,
         self._guards, self._paints, self._inputs,
-        self._clips, self._texts, self._images,
+        self._clips, self._scrolls, self._scroll_controls, self._texts, self._images,
         self._customs, self._floats,
         root_index)
 end
@@ -167,6 +181,12 @@ end
 
 function Bound.EnvSlot:plan_binding(ctx)
     return Plan.Env(self.name)
+end
+
+function Bound.ScrollMetric:plan_binding(ctx)
+    return Plan.ScrollMetric(
+        ctx:lookup_node_by_stable_id(self.id),
+        self.metric)
 end
 
 function Bound.Unary:plan_binding(ctx)
@@ -272,12 +292,25 @@ function Bound.Clip:plan(ctx, node_index)
     local spec = Plan.ClipSpec(
         node_index,
         self.horizontal,
-        self.vertical,
-        self.child_offset_x and
-            self.child_offset_x:plan_binding(ctx) or nil,
-        self.child_offset_y and
-            self.child_offset_y:plan_binding(ctx) or nil)
+        self.vertical)
     return ctx:add_clip(spec)
+end
+
+function Bound.Scroll:plan(ctx, node_index)
+    local spec = Plan.ScrollSpec(
+        node_index,
+        self.horizontal,
+        self.vertical)
+    return ctx:add_scroll(spec)
+end
+
+function Bound.ScrollControl:plan(ctx, node_index)
+    local spec = Plan.ScrollControlSpec(
+        node_index,
+        ctx:lookup_node_by_stable_id(self.target),
+        self.axis,
+        self.kind)
+    return ctx:add_scroll_control(spec)
 end
 
 ---------------------------------------------------------------------------
@@ -363,9 +396,25 @@ function Bound.Node:plan(ctx, parent_index)
         self.input.cursor, self.input.action)
     local input_slot = ctx:add_input(input_spec)
 
-    -- Optional clip
-    local clip_slot = self.clip and
-        self.clip:plan(ctx, index) or nil
+    -- Optional scroll
+    local scroll_slot = self.scroll and
+        self.scroll:plan(ctx, index) or nil
+
+    -- Optional scroll control
+    local scroll_control_slot = self.scroll_control and
+        self.scroll_control:plan(ctx, index) or nil
+
+    -- Effective clip is explicit clip union scroll-enabled axes.
+    local clip_slot = nil
+    do
+        local horizontal = (self.clip and self.clip.horizontal or false)
+                        or (self.scroll and self.scroll.horizontal or false)
+        local vertical = (self.clip and self.clip.vertical or false)
+                      or (self.scroll and self.scroll.vertical or false)
+        if horizontal or vertical then
+            clip_slot = ctx:add_clip(Plan.ClipSpec(index, horizontal, vertical))
+        end
+    end
 
     -- Optional leaf
     local text_slot, image_slot, custom_slot = nil, nil, nil
@@ -421,6 +470,8 @@ function Bound.Node:plan(ctx, parent_index)
         paint_slot,
         input_slot,
         clip_slot,
+        scroll_slot,
+        scroll_control_slot,
         text_slot,
         image_slot,
         custom_slot,

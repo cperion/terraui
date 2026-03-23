@@ -20,6 +20,7 @@ This file is the entry point for the TerraUI design set.
 - `docs/design/10-builder-api-reference.md` — concrete builder functions, option tables, and signatures
 - `docs/design/11-schema-dsl.md` — Terra language-extension schema DSL for authoring and validating the ASDL
 - `docs/design/12-backend-contracts.md` — backend identity, runtime session, and presenter/backend contract
+- `docs/design/13-scroll-and-scroll-areas.md` — proposed redesign splitting structural clip from runtime-backed scroll areas
 - `docs/design/terraui.asdl` — canonical raw ASDL schema
 
 Recommended implementation reading order:
@@ -35,7 +36,8 @@ Recommended implementation reading order:
 10. `02-layout-input-and-rendering.md`
 11. `03-runtime-backends-opengl.md`
 12. `12-backend-contracts.md`
-13. `04-prototype-and-open-questions.md`
+13. `13-scroll-and-scroll-areas.md`
+14. `04-prototype-and-open-questions.md`
 
 ## 1. Product definition
 
@@ -54,7 +56,7 @@ The final conversation revisions converge on these decisions:
 1. The pipeline is:
    **Decl -> Bound -> Plan -> Kernel**
 2. `Bound` replaces the earlier looser `Norm` naming.
-3. `Clip` is first-class and replaces the earlier overflow/scroll smear.
+3. `Clip` is first-class for structural viewport clipping, and scrolling is being split into its own first-class runtime-backed concept.
 4. `aspect_ratio` belongs on the node itself, not only on image leaves.
 5. The `Plan` phase flattens the tree into a dense node array plus typed side tables.
 6. The `Kernel` phase should remain record-only and as monomorphic as possible.
@@ -137,7 +139,7 @@ Do not collapse draw commands into one tagged union. Keep separate streams and r
 - stack-like authoring sugar if it lowers cleanly
 - fit / grow / fixed / percent sizing
 - padding, gap, alignment
-- clipping and scroll offsets
+- structural clipping and runtime-backed scroll viewports
 - floating overlays / tooltip placement
 - text, image, custom leaves
 - background, border, radius, opacity

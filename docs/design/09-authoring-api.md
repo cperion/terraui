@@ -1,7 +1,9 @@
 # TerraUI Authoring API
 
-Status: implementation-aligned v0.5  
+Status: design-target v0.6  
 Purpose: define the public user-facing API that lowers into `Decl`.
+
+Implementation note: the canonical design now treats scrolling as a first-class `Scroll` feature rather than clip child offsets. The current implementation still exposes the older `scroll_x` / `scroll_y` lowering path until migrated.
 
 ## Canonical lower layers
 
@@ -120,6 +122,7 @@ Implemented now:
 - `column`
 - `stack` (currently alias of `column`)
 - `scroll_region`
+- `scroll_area`
 - `tooltip`
 - `label`
 - `button`
@@ -153,6 +156,19 @@ Implemented now:
 - `str`
 - `bool`
 - `as_expr`
+- `scroll.need_x`
+- `scroll.need_y`
+- `scroll.offset_x`
+- `scroll.offset_y`
+- `scroll.viewport_w`
+- `scroll.viewport_h`
+- `scroll.content_w`
+- `scroll.content_h`
+- `scroll.max_x`
+- `scroll.max_y`
+- `scroll.thumb`
+- `scroll.page_dec`
+- `scroll.page_inc`
 
 ### 5.3 Layer 3 — child fragment helpers
 
@@ -176,10 +192,6 @@ local decl = ui.component("demo_inspector") {
     params = {
         ui.param("preview_image") { type = ui.types.image },
         ui.param("title") { type = ui.types.string, default = "Inspector" },
-    },
-
-    state = {
-        ui.state("scroll_y") { type = ui.types.number, initial = 0 },
     },
 
     root = ui.column {
@@ -210,7 +222,6 @@ local decl = ui.component("demo_inspector") {
                 width = ui.fixed(260),
                 height = ui.grow(),
                 vertical = true,
-                scroll_y = ui.state_ref("scroll_y"),
             } {
                 ui.each({1,2,3}, function(i)
                     return ui.button {
@@ -277,7 +288,7 @@ Lowers to `Decl.Param`.
 
 ### State declaration
 ```lua
-ui.state("scroll_y") { type = ui.types.number, initial = 0 }
+ui.state("selected_index") { type = ui.types.number, initial = 0 }
 ```
 
 Lowers to `Decl.StateSlot`.
@@ -285,7 +296,7 @@ Lowers to `Decl.StateSlot`.
 ### Param/state references
 ```lua
 ui.param_ref("preview_image")
-ui.state_ref("scroll_y")
+ui.state_ref("selected_index")
 ```
 
 Lower to:
@@ -358,6 +369,7 @@ Implemented container constructors:
 - `ui.column { ... } { ... }`
 - `ui.stack { ... } { ... }`
 - `ui.scroll_region { ... } { ... }`
+- `ui.scroll_area { ... } { ... }`
 - `ui.tooltip { ... } { ... }`
 
 These return `Decl.Node` values with normalized child lists.
@@ -381,8 +393,19 @@ Flattening is deterministic and happens during DSL capture.
 Current lowering:
 - axis = `Column`
 - width/height default to `grow()`
-- `wheel = true` by default
-- `horizontal`, `vertical`, `scroll_x`, `scroll_y` lower into `Decl.Clip`
+- `horizontal`, `vertical` lower into `Decl.Scroll`
+- effective clip is implied on the same axes as scrolling
+- authored `scroll_x` / `scroll_y` are not part of the structural DSL
+
+### `scroll_area`
+Current lowering:
+- standard-library composite widget built from ordinary nodes plus a real internal `scroll_region`
+- scrollbar gutters and thumbs are authored as regular child nodes
+- thumb size/position are driven by `ui.scroll.*` metrics
+- track-before / track-after segments are explicit child nodes, so bar placement is authored structurally rather than inferred from a single opaque track box
+- scrollbar presence is driven by final `need_x` / `need_y` metrics from the viewport
+- track clicks page through the viewport using kernel-owned `ScrollControl` behavior
+- the runtime layout path performs a small fixed-point solve so cross-axis scrollbar dependence converges within the same frame
 
 ### `tooltip`
 Current lowering:
@@ -399,7 +422,7 @@ Current status:
 
 TerraUI now has two widget layers:
 
-1. built-in DSL combinators such as `label`, `button`, `image_view`, `scroll_region`, and `tooltip`
+1. built-in DSL combinators such as `label`, `button`, `image_view`, `scroll_region`, `scroll_area`, and `tooltip`
 2. user-authored first-class `Decl` widgets via `ui.widget(...)` and `ui.use(...)`
 
 Important implementation rule:

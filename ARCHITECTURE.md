@@ -26,6 +26,7 @@ Current implementation files of note:
 - `docs/design/10-builder-api-reference.md`
 - `docs/design/11-schema-dsl.md`
 - `docs/design/12-backend-contracts.md`
+- `docs/design/13-scroll-and-scroll-areas.md`
 - `docs/design/terraui.asdl`
 
 ## Notes
@@ -35,7 +36,7 @@ These docs were extracted from the **latest design revisions** in `starter-conv.
 Important final-source changes reflected in the split docs:
 - pipeline is `Decl -> Bound -> Plan -> Kernel`
 - `Bound` replaces the earlier `Norm` terminology
-- `Clip` replaces the earlier overflow/scroll smear
+- `Clip` now covers structural viewport clipping; `Scroll` is implemented as a separate first-class concept, and standard scrollbars/scroll areas live at the widget layer
 - `aspect_ratio` is node-level
 - `Plan.Node` carries subtree information for correct clip bracketing
 - render commands keep split streams but require `seq` for global ordering
@@ -56,4 +57,5 @@ Important final-source changes reflected in the split docs:
 11. `docs/design/02-layout-input-and-rendering.md`
 12. `docs/design/03-runtime-backends-opengl.md`
 13. `docs/design/12-backend-contracts.md`
-14. `docs/design/04-prototype-and-open-questions.md`
+14. `docs/design/13-scroll-and-scroll-areas.md`
+15. `docs/design/04-prototype-and-open-questions.md`

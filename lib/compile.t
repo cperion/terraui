@@ -16,6 +16,7 @@ local Plan = TerraUI.types.Plan
 local Kernel = TerraUI.types.Kernel
 local C = terralib.includecstring [[
     #include <string.h>
+    #include <math.h>
 ]]
 
 ---------------------------------------------------------------------------
@@ -30,6 +31,10 @@ struct NodeState {
 
     content_x: float; content_y: float
     content_w: float; content_h: float
+
+    content_extent_w: float; content_extent_h: float
+    scroll_x: float; scroll_y: float
+    scroll_need_x: bool; scroll_need_y: bool
 
     want_w: float; want_h: float
 
@@ -52,6 +57,8 @@ struct HitState {
     hot: int32
     active: int32
     focus: int32
+    active_offset_x: float
+    active_offset_y: float
 }
 
 struct ClipState   { count: int32 }
@@ -448,6 +455,38 @@ function Plan.Env:compile_number(ctx)
     error("env binding not yet supported: " .. self.name)
 end
 
+function Plan.ScrollMetric:compile_number(ctx)
+    local frame = ctx.frame_sym
+    local n = self.node_index
+    local metric = self.metric
+    if metric == Decl.ScrollOffsetX then
+        return `[frame].nodes[n].scroll_x
+    elseif metric == Decl.ScrollOffsetY then
+        return `[frame].nodes[n].scroll_y
+    elseif metric == Decl.ScrollViewportW then
+        return `[frame].nodes[n].content_w
+    elseif metric == Decl.ScrollViewportH then
+        return `[frame].nodes[n].content_h
+    elseif metric == Decl.ScrollContentW then
+        return `[frame].nodes[n].content_extent_w
+    elseif metric == Decl.ScrollContentH then
+        return `[frame].nodes[n].content_extent_h
+    elseif metric == Decl.ScrollMaxX then
+        return `terralib.select([frame].nodes[n].content_extent_w - [frame].nodes[n].content_w > 0.0f,
+                                 [frame].nodes[n].content_extent_w - [frame].nodes[n].content_w,
+                                 0.0f)
+    elseif metric == Decl.ScrollMaxY then
+        return `terralib.select([frame].nodes[n].content_extent_h - [frame].nodes[n].content_h > 0.0f,
+                                 [frame].nodes[n].content_extent_h - [frame].nodes[n].content_h,
+                                 0.0f)
+    elseif metric == Decl.ScrollNeedX then
+        return `terralib.select([frame].nodes[n].scroll_need_x, 1.0f, 0.0f)
+    elseif metric == Decl.ScrollNeedY then
+        return `terralib.select([frame].nodes[n].scroll_need_y, 1.0f, 0.0f)
+    end
+    error("unknown scroll metric")
+end
+
 function Plan.Expr:compile_number(ctx)
     local a = {}
     for i, arg in ipairs(self.args) do
@@ -463,6 +502,22 @@ function Plan.Expr:compile_number(ctx)
         return `[a[1]] * [a[2]]
     elseif op == "/" then
         return `[a[1]] / [a[2]]
+    elseif op == "max" then
+        return `terralib.select([a[1]] > [a[2]], [a[1]], [a[2]])
+    elseif op == "min" then
+        return `terralib.select([a[1]] < [a[2]], [a[1]], [a[2]])
+    elseif op == ">" then
+        return `terralib.select([a[1]] > [a[2]], 1.0f, 0.0f)
+    elseif op == "<" then
+        return `terralib.select([a[1]] < [a[2]], 1.0f, 0.0f)
+    elseif op == ">=" then
+        return `terralib.select([a[1]] >= [a[2]], 1.0f, 0.0f)
+    elseif op == "<=" then
+        return `terralib.select([a[1]] <= [a[2]], 1.0f, 0.0f)
+    elseif op == "==" then
+        return `terralib.select([a[1]] == [a[2]], 1.0f, 0.0f)
+    elseif op == "!=" then
+        return `terralib.select([a[1]] ~= [a[2]], 1.0f, 0.0f)
     elseif op == "select" then
         return `terralib.select([a[1]] ~= 0.0f, [a[2]], [a[3]])
     else
@@ -494,6 +549,19 @@ function Plan.State:compile_bool(ctx)
     local frame = ctx.frame_sym
     local f = "s" .. self.slot
     return `[frame].state.[f]
+end
+
+function Plan.ScrollMetric:compile_bool(ctx)
+    local frame = ctx.frame_sym
+    local n = self.node_index
+    local metric = self.metric
+    if metric == Decl.ScrollNeedX then
+        return `[frame].nodes[n].scroll_need_x
+    elseif metric == Decl.ScrollNeedY then
+        return `[frame].nodes[n].scroll_need_y
+    end
+    local num = self:compile_number(ctx)
+    return `[num] ~= 0.0f
 end
 
 function Plan.Expr:compile_bool(ctx)
@@ -588,6 +656,10 @@ local function resolve_size(rule, available, intrinsic, ctx)
     error("unknown SizeRule: " .. tostring(rule.kind))
 end
 
+local function measure_rule_size(rule, want_q, ctx)
+    return resolve_size(rule, `0.0f, want_q, ctx)
+end
+
 local function apply_aspect_ratio(node, width_q, height_q, ctx)
     if not node.aspect_ratio then
         return width_q, height_q
@@ -655,37 +727,32 @@ function CompileCtx:flow_children(parent)
     return out
 end
 
-function CompileCtx:emit_node_measure(node)
+---------------------------------------------------------------------------
+-- Width-first layout: measure widths, resolve widths, measure heights
+---------------------------------------------------------------------------
+
+-- Pass A: bottom-up width measure — compute want_w, content_extent_w
+function CompileCtx:emit_width_measure(node)
     local frame = self.frame_sym
     local i = node.index
     local stmts = terralib.newlist()
 
     local pad_l = node.padding_left:compile_number(self)
-    local pad_t = node.padding_top:compile_number(self)
     local pad_r = node.padding_right:compile_number(self)
-    local pad_b = node.padding_bottom:compile_number(self)
-    local gap_v = node.gap:compile_number(self)
 
     local leaf_w = `0.0f
-    local leaf_h = `0.0f
-
     if node.text_slot then
         local ts = self.plan.texts[node.text_slot + 1]
         leaf_w = ts:compile_measure_width(self)
-        leaf_h = ts:compile_measure_height_for_width(self, leaf_w)
     end
 
     local children = self:flow_children(node)
-    local child_w = symbol(float, "want_child_w" .. i)
-    local child_h = symbol(float, "want_child_h" .. i)
-
-    stmts:insert(quote
-        var [child_w] = 0.0f
-        var [child_h] = 0.0f
-    end)
+    local child_w = symbol(float, "wm_cw" .. i)
+    stmts:insert(quote var [child_w] = 0.0f end)
 
     local child_count = #children
     if child_count > 0 then
+        local gap_v = node.gap:compile_number(self)
         if node.axis == Decl.Row then
             if child_count > 1 then
                 stmts:insert(quote [child_w] = [gap_v] * [float](child_count - 1) end)
@@ -693,23 +760,15 @@ function CompileCtx:emit_node_measure(node)
             for _, child in ipairs(children) do
                 local ci = child.index
                 stmts:insert(quote
-                    [child_w] = [child_w] + [frame].nodes[ci].want_w
-                    [child_h] = terralib.select([child_h] > [frame].nodes[ci].want_h,
-                                                [child_h],
-                                                [frame].nodes[ci].want_h)
+                    [child_w] = [child_w] + [measure_rule_size(child.width, `[frame].nodes[ci].want_w, self)]
                 end)
             end
         else
-            if child_count > 1 then
-                stmts:insert(quote [child_h] = [gap_v] * [float](child_count - 1) end)
-            end
             for _, child in ipairs(children) do
                 local ci = child.index
+                local mw = measure_rule_size(child.width, `[frame].nodes[ci].want_w, self)
                 stmts:insert(quote
-                    [child_h] = [child_h] + [frame].nodes[ci].want_h
-                    [child_w] = terralib.select([child_w] > [frame].nodes[ci].want_w,
-                                                [child_w],
-                                                [frame].nodes[ci].want_w)
+                    [child_w] = terralib.select([child_w] > [mw], [child_w], [mw])
                 end)
             end
         end
@@ -717,18 +776,152 @@ function CompileCtx:emit_node_measure(node)
 
     stmts:insert(quote
         if [frame].nodes[i].visible then
-            [frame].nodes[i].want_w = terralib.select([leaf_w] > [child_w], [leaf_w], [child_w]) + [pad_l] + [pad_r]
-            [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+            [frame].nodes[i].content_extent_w = terralib.select([leaf_w] > [child_w], [leaf_w], [child_w])
+            [frame].nodes[i].want_w = [frame].nodes[i].content_extent_w + [pad_l] + [pad_r]
         else
+            [frame].nodes[i].content_extent_w = 0.0f
             [frame].nodes[i].want_w = 0.0f
-            [frame].nodes[i].want_h = 0.0f
         end
     end)
 
     return quote [stmts] end
 end
 
-function CompileCtx:emit_node_wrap_measure(node)
+-- Pass B: top-down width resolve — assign w and content_w for every node
+function CompileCtx:emit_width_resolve(node)
+    local frame = self.frame_sym
+    local i = node.index
+    local active = terralib.newlist()
+
+    local pad_l = node.padding_left:compile_number(self)
+    local pad_r = node.padding_right:compile_number(self)
+
+    if node.parent == nil then
+        local w = resolve_size(node.width, `[frame].viewport_w, `[frame].nodes[i].want_w, self)
+        active:insert(quote [frame].nodes[i].w = [w] end)
+    end
+    -- Non-root: w was already set by parent's width distribution
+
+    -- Snap content_w to floor BEFORE height measurement so that text
+    -- wrapping during measure uses the same pixel-exact width as the
+    -- renderer.  Without this, a fractional content_w lets a word "fit"
+    -- during measurement that then wraps during rendering.
+    active:insert(quote
+        [frame].nodes[i].content_w = C.floorf([frame].nodes[i].w - [pad_l] - [pad_r])
+    end)
+
+    -- Distribute widths to flow children
+    local children = self:flow_children(node)
+    if #children > 0 then
+        active:insertall(self:emit_width_distribution(node, children))
+    end
+
+    return quote
+        if [frame].nodes[i].visible then
+            [active]
+        else
+            [frame].nodes[i].w = 0
+            [frame].nodes[i].content_w = 0
+        end
+    end
+end
+
+function CompileCtx:emit_width_distribution(parent, children)
+    local frame = self.frame_sym
+    local pi = parent.index
+    local stmts = terralib.newlist()
+    local is_row = (parent.axis == Decl.Row)
+    local avail_w = `[frame].nodes[pi].content_w
+
+    if is_row then
+        -- Row: width is the main axis — distribute among children
+        local gap_v = parent.gap:compile_number(self)
+        local grow_count = 0
+        for _, child in ipairs(children) do
+            if child.width.kind == "Grow" then grow_count = grow_count + 1 end
+        end
+
+        local total_fixed = symbol(float, "wd_tf" .. pi)
+        stmts:insert(quote var [total_fixed] = 0.0f end)
+
+        local child_syms = {}
+        for idx, child in ipairs(children) do
+            local sym = symbol(float, "wd_w" .. child.index)
+            child_syms[idx] = sym
+            if child.width.kind == "Grow" then
+                stmts:insert(quote var [sym] = 0.0f end)
+            else
+                local val = resolve_size(child.width, avail_w, `[frame].nodes[child.index].want_w, self)
+                stmts:insert(quote
+                    var [sym] = [val]
+                    [total_fixed] = [total_fixed] + [sym]
+                end)
+            end
+        end
+
+        if grow_count > 0 then
+            local rem = symbol(float, "wd_rem" .. pi)
+            local ge  = symbol(float, "wd_ge" .. pi)
+            stmts:insert(quote
+                var [rem] = [avail_w] - [total_fixed] - [gap_v] * [float]([#children - 1])
+                if [rem] < 0 then [rem] = 0 end
+                var [ge] = [rem] / [float](grow_count)
+            end)
+            for idx, child in ipairs(children) do
+                if child.width.kind == "Grow" then
+                    local r = `[ge]
+                    if child.width.min then
+                        local mn = child.width.min:compile_number(self)
+                        r = `terralib.select([r] < [mn], [mn], [r])
+                    end
+                    if child.width.max then
+                        local mx = child.width.max:compile_number(self)
+                        r = `terralib.select([r] > [mx], [mx], [r])
+                    end
+                    stmts:insert(quote [child_syms[idx]] = [r] end)
+                end
+            end
+        end
+
+        for idx, child in ipairs(children) do
+            stmts:insert(quote [frame].nodes[child.index].w = [child_syms[idx]] end)
+        end
+    else
+        -- Column: width is the cross axis — each child resolved independently
+        for _, child in ipairs(children) do
+            local w = resolve_size(child.width, avail_w, `[frame].nodes[child.index].want_w, self)
+            stmts:insert(quote [frame].nodes[child.index].w = [w] end)
+        end
+    end
+
+    return stmts
+end
+
+-- Float width resolve — set w and content_w from anchor dimensions
+function CompileCtx:emit_float_width_resolve(fs)
+    local frame = self.frame_sym
+    local node = self.plan.nodes[fs.node_index + 1]
+    local target = fs.attach_parent_slot
+
+    local pad_l = node.padding_left:compile_number(self)
+    local pad_r = node.padding_right:compile_number(self)
+    local base_w = resolve_size(node.width, `[frame].nodes[target].w, `[frame].nodes[fs.node_index].want_w, self)
+    local exw = fs.expand_w:compile_number(self)
+
+    return quote
+        if [frame].nodes[fs.node_index].visible then
+            [frame].nodes[fs.node_index].w = [base_w] + [exw]
+            [frame].nodes[fs.node_index].content_w = C.floorf([frame].nodes[fs.node_index].w - [pad_l] - [pad_r])
+        else
+            [frame].nodes[fs.node_index].w = 0
+            [frame].nodes[fs.node_index].content_w = 0
+        end
+    end
+end
+
+-- Pass C: bottom-up height measure — compute want_h, content_extent_h
+-- using the real content_w assigned by the width resolve pass
+function CompileCtx:emit_height_measure(node)
     local frame = self.frame_sym
     local i = node.index
     local pad_t = node.padding_top:compile_number(self)
@@ -742,7 +935,7 @@ function CompileCtx:emit_node_wrap_measure(node)
     end
 
     local children = self:flow_children(node)
-    local child_h = symbol(float, "wrap_want_child_h" .. i)
+    local child_h = symbol(float, "hm_ch" .. i)
     local stmts = terralib.newlist()
     stmts:insert(quote var [child_h] = 0.0f end)
 
@@ -751,10 +944,9 @@ function CompileCtx:emit_node_wrap_measure(node)
         if node.axis == Decl.Row then
             for _, child in ipairs(children) do
                 local ci = child.index
+                local mh = measure_rule_size(child.height, `[frame].nodes[ci].want_h, self)
                 stmts:insert(quote
-                    [child_h] = terralib.select([child_h] > [frame].nodes[ci].want_h,
-                                                [child_h],
-                                                [frame].nodes[ci].want_h)
+                    [child_h] = terralib.select([child_h] > [mh], [child_h], [mh])
                 end)
             end
         else
@@ -764,7 +956,7 @@ function CompileCtx:emit_node_wrap_measure(node)
             for _, child in ipairs(children) do
                 local ci = child.index
                 stmts:insert(quote
-                    [child_h] = [child_h] + [frame].nodes[ci].want_h
+                    [child_h] = [child_h] + [measure_rule_size(child.height, `[frame].nodes[ci].want_h, self)]
                 end)
             end
         end
@@ -772,8 +964,10 @@ function CompileCtx:emit_node_wrap_measure(node)
 
     stmts:insert(quote
         if [frame].nodes[i].visible then
-            [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+            [frame].nodes[i].content_extent_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h])
+            [frame].nodes[i].want_h = [frame].nodes[i].content_extent_h + [pad_t] + [pad_b]
         else
+            [frame].nodes[i].content_extent_h = 0.0f
             [frame].nodes[i].want_h = 0.0f
         end
     end)
@@ -982,6 +1176,11 @@ function Plan.Node:compile_layout(ctx)
         active:insert(clip:compile_apply(ctx))
     end
 
+    if self.scroll_slot then
+        local scroll = ctx.plan.scrolls[self.scroll_slot + 1]
+        active:insert(scroll:compile_apply(ctx))
+    end
+
     if self.child_count > 0 then
         active:insertall(ctx:emit_children_placement(self))
     end
@@ -998,6 +1197,12 @@ function Plan.Node:compile_layout(ctx)
             [frame].nodes[i].content_y = 0
             [frame].nodes[i].content_w = 0
             [frame].nodes[i].content_h = 0
+            [frame].nodes[i].content_extent_w = 0
+            [frame].nodes[i].content_extent_h = 0
+            [frame].nodes[i].scroll_x = 0
+            [frame].nodes[i].scroll_y = 0
+            [frame].nodes[i].scroll_need_x = false
+            [frame].nodes[i].scroll_need_y = false
             [frame].nodes[i].clip_x0 = 0
             [frame].nodes[i].clip_y0 = 0
             [frame].nodes[i].clip_x1 = 0
@@ -1025,6 +1230,7 @@ function Plan.Node:compile_hit(ctx)
 
     local interactive = input.hover or input.press or input.focus or input.wheel
                         or input.cursor ~= nil or input.action ~= nil
+                        or self.scroll_slot ~= nil
     if not interactive then
         return quote end
     end
@@ -1115,6 +1321,8 @@ function Plan.InputSpec:compile_input(ctx, node_index)
         stmts:insert(quote
             if [frame].input.mouse_pressed and [frame].hit.hot == node_index then
                 [frame].hit.active = node_index
+                [frame].hit.active_offset_x = [frame].input.mouse_x - [frame].nodes[node_index].x
+                [frame].hit.active_offset_y = [frame].input.mouse_y - [frame].nodes[node_index].y
             end
         end)
     end
@@ -1136,12 +1344,16 @@ function Plan.InputSpec:compile_input(ctx, node_index)
                     [frame].action_name = action
                 end
                 [frame].hit.active = -1
+                [frame].hit.active_offset_x = 0.0f
+                [frame].hit.active_offset_y = 0.0f
             end
         end)
     elseif self.press then
         stmts:insert(quote
             if [frame].input.mouse_released and [frame].hit.active == node_index then
                 [frame].hit.active = -1
+                [frame].hit.active_offset_x = 0.0f
+                [frame].hit.active_offset_y = 0.0f
             end
         end)
     end
@@ -1198,16 +1410,174 @@ function Plan.ClipSpec:compile_apply(ctx)
         end)
     end
 
-    if self.child_offset_x then
-        local ox = self.child_offset_x:compile_number(ctx)
-        stmts:insert(quote [frame].nodes[i].content_x = [frame].nodes[i].content_x - [ox] end)
+    return quote [stmts] end
+end
+
+function Plan.ScrollSpec:compile_apply(ctx)
+    local frame = ctx.frame_sym
+    local i = self.node_index
+    local stmts = terralib.newlist()
+
+    if self.horizontal then
+        stmts:insert(quote
+            var max_scroll_x = [frame].nodes[i].content_extent_w - [frame].nodes[i].content_w
+            [frame].nodes[i].scroll_need_x = max_scroll_x > 0.0f
+            if max_scroll_x > 0.0f then
+                if [frame].nodes[i].scroll_x < 0.0f then [frame].nodes[i].scroll_x = 0.0f end
+                if [frame].nodes[i].scroll_x > max_scroll_x then [frame].nodes[i].scroll_x = max_scroll_x end
+                [frame].nodes[i].content_x = [frame].nodes[i].content_x - [frame].nodes[i].scroll_x
+            end
+        end)
+    else
+        stmts:insert(quote
+            [frame].nodes[i].scroll_x = 0.0f
+            [frame].nodes[i].scroll_need_x = false
+        end)
     end
-    if self.child_offset_y then
-        local oy = self.child_offset_y:compile_number(ctx)
-        stmts:insert(quote [frame].nodes[i].content_y = [frame].nodes[i].content_y - [oy] end)
+
+    if self.vertical then
+        stmts:insert(quote
+            var max_scroll_y = [frame].nodes[i].content_extent_h - [frame].nodes[i].content_h
+            [frame].nodes[i].scroll_need_y = max_scroll_y > 0.0f
+            if max_scroll_y > 0.0f then
+                if [frame].nodes[i].scroll_y < 0.0f then [frame].nodes[i].scroll_y = 0.0f end
+                if [frame].nodes[i].scroll_y > max_scroll_y then [frame].nodes[i].scroll_y = max_scroll_y end
+                [frame].nodes[i].content_y = [frame].nodes[i].content_y - [frame].nodes[i].scroll_y
+            end
+        end)
+    else
+        stmts:insert(quote
+            [frame].nodes[i].scroll_y = 0.0f
+            [frame].nodes[i].scroll_need_y = false
+        end)
     end
 
     return quote [stmts] end
+end
+
+function Plan.ScrollSpec:compile_input(ctx)
+    local frame = ctx.frame_sym
+    local i = self.node_index
+    local body = terralib.newlist()
+
+    if self.horizontal then
+        body:insert(quote
+            if [frame].input.wheel_dx ~= 0.0f then
+                [frame].nodes[i].scroll_x = [frame].nodes[i].scroll_x + [frame].input.wheel_dx * 32.0f
+                [frame].input.wheel_dx = 0.0f
+            end
+        end)
+    end
+
+    if self.vertical then
+        body:insert(quote
+            if [frame].input.wheel_dy ~= 0.0f then
+                [frame].nodes[i].scroll_y = [frame].nodes[i].scroll_y + [frame].input.wheel_dy * 32.0f
+                [frame].input.wheel_dy = 0.0f
+            end
+        end)
+    end
+
+    -- Route wheel events when the hot node falls inside the scroll_area's
+    -- subtree.  The scroll_area outer container is the scroll node's parent;
+    -- its subtree covers the viewport, overlay bars, and all descendants.
+    local parent_node = ctx.plan.nodes[i + 1].parent
+    local area_start = parent_node or i
+    local area_end = ctx.plan.nodes[area_start + 1].subtree_end
+
+    return quote
+        if [frame].nodes[i].visible and [frame].nodes[i].enabled and
+           [frame].hit.hot >= [area_start] and [frame].hit.hot < [area_end] then
+            [body]
+        end
+    end
+end
+
+function Plan.ScrollControlSpec:compile_input(ctx)
+    local frame = ctx.frame_sym
+    local node = ctx.plan.nodes[self.node_index + 1]
+    if node.parent == nil then
+        return quote end
+    end
+
+    local track = node.parent
+    local target = self.target_node_index
+    local i = self.node_index
+    local kind = self.kind
+
+    if self.axis == Decl.ScrollAxisY then
+        if kind == Decl.ScrollThumbKind then
+            return quote
+                if [frame].hit.active == i and [frame].input.mouse_down and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    var max_scroll = [frame].nodes[target].content_extent_h - [frame].nodes[target].content_h
+                    if max_scroll < 0.0f then max_scroll = 0.0f end
+                    var travel = [frame].nodes[track].content_h - [frame].nodes[i].h
+                    if travel <= 0.0f or max_scroll <= 0.0f then
+                        [frame].nodes[target].scroll_y = 0.0f
+                    else
+                        var pos = [frame].input.mouse_y - [frame].nodes[track].content_y - [frame].hit.active_offset_y
+                        if pos < 0.0f then pos = 0.0f end
+                        if pos > travel then pos = travel end
+                        [frame].nodes[target].scroll_y = pos / travel * max_scroll
+                    end
+                end
+            end
+        elseif kind == Decl.ScrollPageDecKind then
+            return quote
+                if [frame].input.mouse_pressed and [frame].hit.hot == i and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    [frame].nodes[target].scroll_y = [frame].nodes[target].scroll_y - [frame].nodes[target].content_h
+                    [frame].hit.active = -1
+                    [frame].hit.active_offset_x = 0.0f
+                    [frame].hit.active_offset_y = 0.0f
+                end
+            end
+        else
+            return quote
+                if [frame].input.mouse_pressed and [frame].hit.hot == i and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    [frame].nodes[target].scroll_y = [frame].nodes[target].scroll_y + [frame].nodes[target].content_h
+                    [frame].hit.active = -1
+                    [frame].hit.active_offset_x = 0.0f
+                    [frame].hit.active_offset_y = 0.0f
+                end
+            end
+        end
+    else
+        if kind == Decl.ScrollThumbKind then
+            return quote
+                if [frame].hit.active == i and [frame].input.mouse_down and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    var max_scroll = [frame].nodes[target].content_extent_w - [frame].nodes[target].content_w
+                    if max_scroll < 0.0f then max_scroll = 0.0f end
+                    var travel = [frame].nodes[track].content_w - [frame].nodes[i].w
+                    if travel <= 0.0f or max_scroll <= 0.0f then
+                        [frame].nodes[target].scroll_x = 0.0f
+                    else
+                        var pos = [frame].input.mouse_x - [frame].nodes[track].content_x - [frame].hit.active_offset_x
+                        if pos < 0.0f then pos = 0.0f end
+                        if pos > travel then pos = travel end
+                        [frame].nodes[target].scroll_x = pos / travel * max_scroll
+                    end
+                end
+            end
+        elseif kind == Decl.ScrollPageDecKind then
+            return quote
+                if [frame].input.mouse_pressed and [frame].hit.hot == i and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    [frame].nodes[target].scroll_x = [frame].nodes[target].scroll_x - [frame].nodes[target].content_w
+                    [frame].hit.active = -1
+                    [frame].hit.active_offset_x = 0.0f
+                    [frame].hit.active_offset_y = 0.0f
+                end
+            end
+        else
+            return quote
+                if [frame].input.mouse_pressed and [frame].hit.hot == i and [frame].nodes[i].visible and [frame].nodes[i].enabled then
+                    [frame].nodes[target].scroll_x = [frame].nodes[target].scroll_x + [frame].nodes[target].content_w
+                    [frame].hit.active = -1
+                    [frame].hit.active_offset_x = 0.0f
+                    [frame].hit.active_offset_y = 0.0f
+                end
+            end
+        end
+    end
 end
 
 function Plan.ClipSpec:compile_emit_begin(ctx)
@@ -1400,71 +1770,118 @@ function CompileCtx:compile_layout_fn()
     local nodes = self.plan.nodes
     local stmts = terralib.newlist()
 
-    local function emit_layout_passes()
-        local out = terralib.newlist()
+    ---------------------------------------------------------------------------
+    -- Width-first layout: 5 passes, single iteration
+    --
+    --   1. guard_eval    (TD)  — visibility / enabled flags
+    --   2. width_measure (BU)  — intrinsic want_w, content_extent_w
+    --   3. width_resolve (TD)  — assign w, content_w to every node
+    --   4. height_measure(BU)  — want_h using real content_w (text wrapping)
+    --   5. layout        (TD)  — assign h, x, y; scroll clamp; clip
+    --
+    -- Scrollbars are overlay floats (don't take width), so there is no
+    -- vbar-visibility ↔ viewport-width cycle.  One iteration suffices.
+    ---------------------------------------------------------------------------
 
+    -- Pass 1: guard eval (top-down, preorder)
+    for _, node in ipairs(nodes) do
+        stmts:insert(self:emit_guard_eval(node))
+    end
+
+    -- Pass 2: width measure (bottom-up, postorder)
+    for i = #nodes, 1, -1 do
+        stmts:insert(self:emit_width_measure(nodes[i]))
+    end
+
+    -- Pass 3: width resolve (top-down, preorder; floats after flow nodes)
+    local i = 1
+    while i <= #nodes do
+        local node = nodes[i]
+        if node.float_slot then
+            i = node.subtree_end + 1
+        else
+            stmts:insert(self:emit_width_resolve(node))
+            i = i + 1
+        end
+    end
+    for _, fs in ipairs(self.plan.floats) do
+        stmts:insert(self:emit_float_width_resolve(fs))
+        local root = nodes[fs.node_index + 1]
+        -- width-resolve the float root itself (sets content_w, distributes to children)
+        stmts:insert(self:emit_width_resolve(root))
+        local j = root.index + 2
+        while j <= root.subtree_end do
+            local node = nodes[j]
+            if node.float_slot then
+                j = node.subtree_end + 1
+            else
+                stmts:insert(self:emit_width_resolve(node))
+                j = j + 1
+            end
+        end
+    end
+
+    -- Pass 4: height measure (bottom-up, postorder)
+    for i = #nodes, 1, -1 do
+        stmts:insert(self:emit_height_measure(nodes[i]))
+    end
+
+    -- Pass 5: full layout (top-down, preorder; floats after flow)
+    do
         local i = 1
         while i <= #nodes do
             local node = nodes[i]
             if node.float_slot then
                 i = node.subtree_end + 1
             else
-                out:insert(node:compile_layout(self))
+                stmts:insert(node:compile_layout(self))
                 i = i + 1
             end
         end
-
         for _, fs in ipairs(self.plan.floats) do
             local root = nodes[fs.node_index + 1]
-            out:insert(fs:compile_place(self))
-            out:insert(root:compile_layout(self))
-
+            stmts:insert(fs:compile_place(self))
+            stmts:insert(root:compile_layout(self))
             local j = root.index + 2
             while j <= root.subtree_end do
                 local node = nodes[j]
                 if node.float_slot then
                     j = node.subtree_end + 1
                 else
-                    out:insert(node:compile_layout(self))
+                    stmts:insert(node:compile_layout(self))
                     j = j + 1
                 end
             end
         end
-
-        return out
     end
 
-    stmts:insert(quote
-        [frame].draw_seq = 0
-        [frame].action_node = -1
-        [frame].action_name = nil
-        [frame].cursor_name = nil
-    end)
-
-    -- pass 0: guard evaluation (preorder)
-    for _, node in ipairs(nodes) do
-        stmts:insert(self:emit_guard_eval(node))
-    end
-
-    -- pass 1: intrinsic width + provisional height measure (postorder)
-    for i = #nodes, 1, -1 do
-        stmts:insert(self:emit_node_measure(nodes[i]))
-    end
-
-    -- pass 2/3: provisional layout to establish concrete widths/content boxes
-    stmts:insertall(emit_layout_passes())
-
-    -- pass 4: width-aware text remeasure + propagated fit heights (postorder)
-    for i = #nodes, 1, -1 do
-        stmts:insert(self:emit_node_wrap_measure(nodes[i]))
-    end
-
-    -- pass 5/6: final layout using wrapped heights
-    stmts:insertall(emit_layout_passes())
-
+    -- Pass 6: pixel-snap — round all positions to integer pixels so text
+    -- and rects share the same grid.  Positions floor, sizes preserve the
+    -- snapped right/bottom edge, clips snap inward.
+    local node_count = self.node_count
     return terra([frame])
         escape
             for _, s in ipairs(stmts) do emit(s) end
+        end
+        for i = 0, [node_count - 1] do
+            var x0 = C.floorf([frame].nodes[i].x)
+            var y0 = C.floorf([frame].nodes[i].y)
+            [frame].nodes[i].w = C.floorf([frame].nodes[i].x + [frame].nodes[i].w + 0.5f) - x0
+            [frame].nodes[i].h = C.floorf([frame].nodes[i].y + [frame].nodes[i].h + 0.5f) - y0
+            [frame].nodes[i].x = x0
+            [frame].nodes[i].y = y0
+
+            var cx0 = C.floorf([frame].nodes[i].content_x)
+            var cy0 = C.floorf([frame].nodes[i].content_y)
+            [frame].nodes[i].content_w = C.floorf([frame].nodes[i].content_x + [frame].nodes[i].content_w + 0.5f) - cx0
+            [frame].nodes[i].content_h = C.floorf([frame].nodes[i].content_y + [frame].nodes[i].content_h + 0.5f) - cy0
+            [frame].nodes[i].content_x = cx0
+            [frame].nodes[i].content_y = cy0
+
+            [frame].nodes[i].clip_x0 = C.ceilf([frame].nodes[i].clip_x0)
+            [frame].nodes[i].clip_y0 = C.ceilf([frame].nodes[i].clip_y0)
+            [frame].nodes[i].clip_x1 = C.floorf([frame].nodes[i].clip_x1)
+            [frame].nodes[i].clip_y1 = C.floorf([frame].nodes[i].clip_y1)
         end
     end
 end
@@ -1503,6 +1920,14 @@ function CompileCtx:compile_input_fn()
     for _, node in ipairs(nodes) do
         local input = self.plan.inputs[node.input_slot + 1]
         stmts:insert(input:compile_input(self, node.index))
+    end
+
+    for _, sc in ipairs(self.plan.scroll_controls) do
+        stmts:insert(sc:compile_input(self))
+    end
+
+    for i = #self.plan.scrolls, 1, -1 do
+        stmts:insert(self.plan.scrolls[i]:compile_input(self))
     end
 
     return terra([frame])
@@ -1547,6 +1972,7 @@ function CompileCtx:compile_emit_fn()
     local stmts = terralib.newlist()
 
     stmts:insert(quote
+        [frame].draw_seq = 0
         [frame].rect_count = 0
         [frame].border_count = 0
         [frame].text_count = 0
@@ -1565,6 +1991,7 @@ function CompileCtx:compile_emit_fn()
 end
 
 function Plan.Component:compile(ctx)
+    local node_count = ctx.node_count
     local init_fn     = terra(frame: &ctx.frame_t)
         frame.draw_seq = 0
         frame.action_node = -1
@@ -1574,12 +2001,22 @@ function Plan.Component:compile(ctx)
         frame.hit.hot = -1
         frame.hit.active = -1
         frame.hit.focus = -1
+        frame.hit.active_offset_x = 0.0f
+        frame.hit.active_offset_y = 0.0f
         frame.rect_count = 0
         frame.border_count = 0
         frame.text_count = 0
         frame.image_count = 0
         frame.scissor_count = 0
         frame.custom_count = 0
+        for i = 0, [node_count - 1] do
+            frame.nodes[i].content_extent_w = 0.0f
+            frame.nodes[i].content_extent_h = 0.0f
+            frame.nodes[i].scroll_x = 0.0f
+            frame.nodes[i].scroll_y = 0.0f
+            frame.nodes[i].scroll_need_x = false
+            frame.nodes[i].scroll_need_y = false
+        end
     end
     local layout_fn   = ctx:compile_layout_fn()
     local hit_test_fn = ctx:compile_hit_test_fn()
@@ -1589,6 +2026,8 @@ function Plan.Component:compile(ctx)
         layout_fn(frame)
         hit_test_fn(frame)
         input_fn(frame)
+        layout_fn(frame)
+        hit_test_fn(frame)
         emit_fn(frame)
     end
     local noop_fn     = terra(frame: &ctx.frame_t) end

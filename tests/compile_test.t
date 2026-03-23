@@ -43,7 +43,7 @@ local function component(name, params, state, root, widgets)
     return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
 end
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 local function make_node(name, axis, w, h, pad, gap, children)
     return node(
@@ -625,6 +625,44 @@ do
     print("  test 14 (container fit aggregation): ok")
 end
 
+do
+    local k = full_pipeline(component(
+        "fit_fixed_child", List(), List(),
+        node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                make_node("fit_parent", Decl.Column,
+                    Decl.Fit(nil, nil), Decl.Fit(nil, nil),
+                    zero_padding(), zero,
+                    List{
+                        make_node("fixed_child", Decl.Row,
+                            Decl.Fixed(Decl.NumLit(120)), Decl.Fixed(Decl.NumLit(80)))
+                    })
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 800; f.viewport_h = 600
+        [layout_q](&f)
+        if f.nodes[2].w ~= 120 then return 1 end
+        if f.nodes[2].h ~= 80 then return 2 end
+        if f.nodes[1].w ~= 120 then return 3 end
+        if f.nodes[1].h ~= 80 then return 4 end
+        return 0
+    end
+
+    assert(test() == 0, "test 14b failed at " .. tostring(test()))
+    print("  test 14b (fit parent includes fixed child size): ok")
+end
+
 ---------------------------------------------------------------------------
 -- Test 14: row cross-axis center alignment
 ---------------------------------------------------------------------------
@@ -702,46 +740,94 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 16: clip child offsets shift child placement space
+-- Test 16: scroll viewport shifts child placement space
 ---------------------------------------------------------------------------
 
 do
     local k = full_pipeline(component(
-        "clip_offsets", List(), List(),
-        node(
+        "scroll_offsets", List(), List(),
+        Decl.Node(
             Decl.Stable("root"), no_vis(),
             Decl.Layout(Decl.Row,
-                Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
                 zero_padding(), zero,
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(),
-            Decl.Clip(true, false, Decl.NumLit(10), nil),
+            nil,
+            Decl.Scroll(true, false),
+            nil,
             nil, no_input(), nil, nil,
-            List{
+            child_list{
                 make_node("child", Decl.Column,
-                    Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(20))),
+                    Decl.Fixed(Decl.NumLit(200)), Decl.Fixed(Decl.NumLit(20))),
             })))
 
     local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
     local layout_q = k.kernels.layout_fn
 
     local test = terra()
         var f : Frame
+        [init_q](&f)
         f.viewport_w = 100; f.viewport_h = 50
+        f.nodes[0].scroll_x = 10
         [layout_q](&f)
         -- child placement starts from shifted content_x = -10
         if f.nodes[1].x ~= -10 then return 1 end
-        -- root clip is clamped to its content box horizontally
+        -- root effective clip is implied from scroll axis
         if f.nodes[0].clip_x0 ~= 0 then return 2 end
         if f.nodes[0].clip_x1 ~= 100 then return 3 end
-        -- child inherits clipped ancestry
         if f.nodes[1].clip_x0 ~= 0 then return 4 end
         if f.nodes[1].clip_x1 ~= 100 then return 5 end
         return 0
     end
 
     assert(test() == 0, "test 17 failed at " .. tostring(test()))
-    print("  test 17 (clip child offsets): ok")
+    print("  test 17 (scroll viewport translation): ok")
+end
+
+do
+    local k = full_pipeline(component(
+        "scroll_wheel", List(), List(),
+        Decl.Node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Column,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignTop),
+            no_decor(),
+            nil,
+            Decl.Scroll(false, true),
+            nil,
+            nil, no_input(), nil, nil,
+            child_list{
+                make_node("child", Decl.Row,
+                    Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(200))),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        f.input.mouse_x = 10; f.input.mouse_y = 10
+        f.input.wheel_dy = 1
+        [run_q](&f)
+        if f.nodes[0].scroll_y ~= 32 then return 1 end
+        if f.nodes[1].y ~= -32 then return 2 end
+
+        f.input.wheel_dy = 100
+        [run_q](&f)
+        if f.nodes[0].scroll_y ~= 150 then return 3 end
+        if f.nodes[1].y ~= -150 then return 4 end
+        return 0
+    end
+
+    assert(test() == 0, "test 17b failed at " .. tostring(test()))
+    print("  test 17b (scroll wheel updates and clamps runtime offset): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -976,7 +1062,7 @@ do
                 zero_padding(), zero,
                 Decl.AlignLeft, Decl.AlignTop),
             no_decor(),
-            Decl.Clip(true, true, Decl.NumLit(5), Decl.NumLit(6)),
+            Decl.Clip(true, true),
             nil, no_input(), nil, nil,
             List{
                 make_label("txt", "Hi", 20),

@@ -69,7 +69,7 @@ local function component(name, params, state, root, widgets)
 end
 
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 
 local function make_label(name, text)
@@ -286,20 +286,23 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 5: Clip bind
+-- Test 5: Clip and scroll bind
 ---------------------------------------------------------------------------
 
 do
     local ctx = bind.BindCtx.new()
 
-    local clip = Decl.Clip(true, false, Decl.NumLit(10), nil)
+    local clip = Decl.Clip(true, false)
     local bc = clip:bind(ctx)
     assert(bc.horizontal == true)
     assert(bc.vertical == false)
-    assert(bc.child_offset_x.v == 10)
-    assert(bc.child_offset_y == nil)
 
-    print("  test 5 (clip bind): ok")
+    local scroll = Decl.Scroll(false, true)
+    local bs = scroll:bind(ctx)
+    assert(bs.horizontal == false)
+    assert(bs.vertical == true)
+
+    print("  test 5 (clip and scroll bind): ok")
 end
 
 ---------------------------------------------------------------------------

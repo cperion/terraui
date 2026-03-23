@@ -19,7 +19,7 @@ module Decl {
 
     WidgetSlot = (string name)
 
-    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Child* children)
+    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Scroll? scroll, ScrollControl? scroll_control, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Child* children)
 
     Id = Auto
          | Stable(string name)
@@ -63,7 +63,29 @@ module Decl {
 
     CornerRadius = (Expr top_left, Expr top_right, Expr bottom_right, Expr bottom_left)
 
-    Clip = (boolean horizontal, boolean vertical, Expr? child_offset_x, Expr? child_offset_y)
+    Clip = (boolean horizontal, boolean vertical)
+
+    Scroll = (boolean horizontal, boolean vertical)
+
+    ScrollAxis = ScrollAxisX
+         | ScrollAxisY
+
+    ScrollMetricKind = ScrollOffsetX
+         | ScrollOffsetY
+         | ScrollViewportW
+         | ScrollViewportH
+         | ScrollContentW
+         | ScrollContentH
+         | ScrollMaxX
+         | ScrollMaxY
+         | ScrollNeedX
+         | ScrollNeedY
+
+    ScrollControlKind = ScrollThumbKind
+         | ScrollPageDecKind
+         | ScrollPageIncKind
+
+    ScrollControl = (Id target, ScrollAxis axis, ScrollControlKind kind)
 
     Floating = (FloatTarget target, AttachPoint element_point, AttachPoint parent_point, Expr offset_x, Expr offset_y, Expr expand_w, Expr expand_h, Expr z_index, PointerCapture pointer_capture)
 
@@ -119,6 +141,7 @@ module Decl {
          | WidgetPropRef(string name)
          | ThemeRef(string name)
          | EnvRef(string name)
+         | ScrollMetric(Id id, ScrollMetricKind metric)
          | Unary(string op, Expr rhs)
          | Binary(string op, Expr lhs, Expr rhs)
          | Select(Expr cond, Expr yes, Expr no)
@@ -135,7 +158,7 @@ module Bound {
 
     StateSlot = (string name, Decl.ValueType ty, number slot, Value? initial)
 
-    Node = (number local_id, ResolvedId stable_id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Floating? floating, Input input, Value? aspect_ratio, Leaf? leaf, Node* children)
+    Node = (number local_id, ResolvedId stable_id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Scroll? scroll, ScrollControl? scroll_control, Floating? floating, Input input, Value? aspect_ratio, Leaf? leaf, Node* children)
 
     ResolvedId = (string base, number salt)
 
@@ -156,7 +179,11 @@ module Bound {
 
     CornerRadius = (Value top_left, Value top_right, Value bottom_right, Value bottom_left)
 
-    Clip = (boolean horizontal, boolean vertical, Value? child_offset_x, Value? child_offset_y)
+    Clip = (boolean horizontal, boolean vertical)
+
+    Scroll = (boolean horizontal, boolean vertical)
+
+    ScrollControl = (ResolvedId target, Decl.ScrollAxis axis, Decl.ScrollControlKind kind)
 
     Floating = (FloatTarget target, Decl.AttachPoint element_point, Decl.AttachPoint parent_point, Value offset_x, Value offset_y, Value expand_w, Value expand_h, Value z_index, Decl.PointerCapture pointer_capture)
 
@@ -185,6 +212,7 @@ module Bound {
          | ParamSlot(number slot)
          | StateSlotRef(number slot)
          | EnvSlot(string name)
+         | ScrollMetric(ResolvedId id, Decl.ScrollMetricKind metric)
          | Unary(string op, Value rhs)
          | Binary(string op, Value lhs, Value rhs)
          | Select(Value cond, Value yes, Value no)
@@ -193,9 +221,9 @@ module Bound {
 }
 
 module Plan {
-    Component = (Bound.SpecializationKey key, Node* nodes, Guard* guards, Paint* paints, InputSpec* inputs, ClipSpec* clips, TextSpec* texts, ImageSpec* images, CustomSpec* customs, FloatSpec* floats, number root_index) unique
+    Component = (Bound.SpecializationKey key, Node* nodes, Guard* guards, Paint* paints, InputSpec* inputs, ClipSpec* clips, ScrollSpec* scrolls, ScrollControlSpec* scroll_controls, TextSpec* texts, ImageSpec* images, CustomSpec* customs, FloatSpec* floats, number root_index) unique
 
-    Node = (number index, number? parent, number? first_child, number child_count, number subtree_end, Decl.Axis axis, SizeRule width, SizeRule height, Binding padding_left, Binding padding_top, Binding padding_right, Binding padding_bottom, Binding gap, Decl.AlignX align_x, Decl.AlignY align_y, number guard_slot, number paint_slot, number input_slot, number? clip_slot, number? text_slot, number? image_slot, number? custom_slot, number? float_slot, Binding? aspect_ratio)
+    Node = (number index, number? parent, number? first_child, number child_count, number subtree_end, Decl.Axis axis, SizeRule width, SizeRule height, Binding padding_left, Binding padding_top, Binding padding_right, Binding padding_bottom, Binding gap, Decl.AlignX align_x, Decl.AlignY align_y, number guard_slot, number paint_slot, number input_slot, number? clip_slot, number? scroll_slot, number? scroll_control_slot, number? text_slot, number? image_slot, number? custom_slot, number? float_slot, Binding? aspect_ratio)
 
     SizeRule = Fit(Binding? min, Binding? max)
          | Grow(Binding? min, Binding? max)
@@ -212,7 +240,11 @@ module Plan {
 
     InputSpec = (boolean hover, boolean press, boolean focus, boolean wheel, string? cursor, string? action)
 
-    ClipSpec = (number node_index, boolean horizontal, boolean vertical, Binding? child_offset_x, Binding? child_offset_y)
+    ClipSpec = (number node_index, boolean horizontal, boolean vertical)
+
+    ScrollSpec = (number node_index, boolean horizontal, boolean vertical)
+
+    ScrollControlSpec = (number node_index, number target_node_index, Decl.ScrollAxis axis, Decl.ScrollControlKind kind)
 
     TextSpec = (number node_index, Binding content, Binding color, Binding font_id, Binding font_size, Binding letter_spacing, Binding line_height, Decl.WrapMode wrap, Decl.TextAlign align)
 
@@ -232,6 +264,7 @@ module Plan {
          | Param(number slot)
          | State(number slot)
          | Env(string name)
+         | ScrollMetric(number node_index, Decl.ScrollMetricKind metric)
          | Expr(string op, Binding* args)
 
 }

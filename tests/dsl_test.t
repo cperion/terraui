@@ -5,6 +5,7 @@ local terraui = require("lib/terraui")
 local Decl = terraui.types.Decl
 
 local ui = terraui.dsl()
+assert(ui.scroll_container == nil)
 
 ---------------------------------------------------------------------------
 -- Test 1: basic DSL lowers to Decl.Component
@@ -67,7 +68,7 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 3: scroll region and tooltip lower to clip/floating
+-- Test 3: scroll region and tooltip lower to scroll/floating
 ---------------------------------------------------------------------------
 
 do
@@ -76,7 +77,6 @@ do
             ui.scroll_region {
                 key = ui.stable("scroll"),
                 vertical = true,
-                scroll_y = 12,
             } {
                 ui.label { text = "Inside" },
             },
@@ -93,12 +93,19 @@ do
         },
     }
 
-    assert(decl.root.children[1].value.clip ~= nil)
-    assert(decl.root.children[1].value.clip.vertical == true)
+    assert(decl.root.children[1].value.scroll ~= nil)
+    assert(decl.root.children[1].value.scroll.vertical == true)
+    assert(decl.root.children[1].value.clip == nil)
     assert(decl.root.children[2].value.floating ~= nil)
     assert(decl.root.children[2].value.floating.target == Decl.FloatParent)
 
-    print("  test 3 (clip/floating lowering): ok")
+    local ok, err = pcall(function()
+        ui.scroll_region { vertical = true, scroll_y = 12 } {}
+    end)
+    assert(not ok)
+    assert(err:match("scroll_x/scroll_y"))
+
+    print("  test 3 (scroll/floating lowering): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -270,7 +277,198 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 7: public compile entry works and memoizes
+-- Test 7: scroll_area composes a viewport and live scrollbar thumb
+---------------------------------------------------------------------------
+
+do
+    local decl = ui.component("scroll_area_demo") {
+        root = ui.scroll_area {
+            key = ui.scope("scrollbox"),
+            width = ui.fixed(100),
+            height = ui.fixed(60),
+            vertical = true,
+            bar_size = 10,
+            viewport_padding = 10,
+        } {
+            ui.spacer {
+                key = ui.stable("content"),
+                width = ui.fixed(60),
+                height = ui.fixed(200),
+                background = ui.rgba(0.4, 0.4, 0.6, 1),
+            },
+        },
+    }
+
+    local k = terraui.compile(decl)
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 200; f.viewport_h = 200
+        f.input.mouse_x = 15; f.input.mouse_y = 15
+        f.input.wheel_dy = 1
+        [run_q](&f)
+        if f.scissor_count ~= 2 then return 1 end
+        -- node 2 = viewport (scroll region)
+        if f.nodes[2].scroll_y ~= 32 then return 2 end
+        f.nodes[2].scroll_y = 160
+        f.input.wheel_dy = 0
+        [run_q](&f)
+        -- node 6 = thumb, node 4 = vbar (overlay float)
+        var thumb_bottom = f.nodes[6].y + f.nodes[6].h
+        var track_bottom = f.nodes[4].content_y + f.nodes[4].content_h
+        if thumb_bottom < track_bottom - 0.1f or thumb_bottom > track_bottom + 0.1f then return 3 end
+        return 0
+    end
+    assert(test() == 0)
+
+    print("  test 7 (scroll_area widget helper): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 8: scroll_area track paging updates scroll offsets
+---------------------------------------------------------------------------
+
+do
+    local decl = ui.component("scroll_area_track_paging") {
+        root = ui.scroll_area {
+            key = ui.scope("scrollbox"),
+            width = ui.fixed(100),
+            height = ui.fixed(60),
+            vertical = true,
+            bar_size = 10,
+            viewport_padding = 10,
+        } {
+            ui.spacer {
+                key = ui.stable("content"),
+                width = ui.fixed(60),
+                height = ui.fixed(200),
+                background = ui.rgba(0.4, 0.4, 0.6, 1),
+            },
+        },
+    }
+
+    local k = terraui.compile(decl)
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 200; f.viewport_h = 200
+        [run_q](&f)
+        -- vbar is overlay float at right edge of body (inside outer padding)
+        f.input.mouse_x = 95; f.input.mouse_y = 45
+        f.input.mouse_pressed = true
+        [run_q](&f)
+        if f.nodes[2].scroll_y ~= 40 then return 1 end
+        f.input.mouse_pressed = false
+        f.input.mouse_released = true
+        [run_q](&f)
+        f.input.mouse_released = false
+        f.input.mouse_pressed = true
+        f.input.mouse_x = 95; f.input.mouse_y = 12
+        [run_q](&f)
+        if f.nodes[2].scroll_y ~= 0 then return 2 end
+        return 0
+    end
+    assert(test() == 0)
+
+    print("  test 8 (scroll_area track paging): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 9: scroll_area hides scrollbar when content fits
+---------------------------------------------------------------------------
+
+do
+    local decl = ui.component("scroll_area_hidden_bar") {
+        root = ui.scroll_area {
+            key = ui.scope("scrollbox"),
+            width = ui.fixed(100),
+            height = ui.fixed(60),
+            vertical = true,
+            bar_size = 10,
+        } {
+            ui.spacer {
+                key = ui.stable("content"),
+                width = ui.fixed(60),
+                height = ui.fixed(20),
+                background = ui.rgba(0.4, 0.4, 0.6, 1),
+            },
+        },
+    }
+
+    local k = terraui.compile(decl)
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 200; f.viewport_h = 200
+        [run_q](&f)
+        -- node 2 = viewport (scroll region), node 4 = vbar overlay float
+        if f.nodes[2].scroll_need_y then return 1 end
+        if f.nodes[4].visible then return 2 end
+        var x0 = f.nodes[2].x
+        [run_q](&f)
+        if f.nodes[2].x ~= x0 then return 3 end
+        return 0
+    end
+    assert(test() == 0)
+
+    print("  test 9 (scroll_area hides unused scrollbar): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 10: scroll_area solves cross-axis scrollbar dependence
+---------------------------------------------------------------------------
+
+do
+    local decl = ui.component("scroll_area_cross_axis") {
+        root = ui.scroll_area {
+            key = ui.scope("scrollbox"),
+            width = ui.fixed(100),
+            height = ui.fixed(60),
+            horizontal = true,
+            vertical = true,
+            bar_size = 10,
+        } {
+            ui.spacer {
+                key = ui.stable("content"),
+                width = ui.fixed(150),
+                height = ui.fixed(120),
+                background = ui.rgba(0.4, 0.4, 0.6, 1),
+            },
+        },
+    }
+
+    local k = terraui.compile(decl)
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 200; f.viewport_h = 200
+        [run_q](&f)
+        -- node 2 = viewport, node 4 = vbar float, node 8 = hbar float
+        if not f.nodes[4].visible then return 1 end
+        if not f.nodes[8].visible then return 2 end
+        if not f.nodes[2].scroll_need_y then return 3 end
+        if not f.nodes[2].scroll_need_x then return 4 end
+        return 0
+    end
+    assert(test() == 0)
+
+    print("  test 10 (scroll_area cross-axis solve): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 11: public compile entry works and memoizes
 ---------------------------------------------------------------------------
 
 do
@@ -315,7 +513,7 @@ do
     end
     assert(test() == 0)
 
-    print("  test 7 (public compile entry): ok")
+    print("  test 11 (public compile entry): ok")
 end
 
 ---------------------------------------------------------------------------

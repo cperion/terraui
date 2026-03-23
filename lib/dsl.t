@@ -23,6 +23,14 @@ local function is_decl_node(v)
     return type(v) == "table" and Decl.Node:isclassof(v)
 end
 
+local function is_decl_scroll(v)
+    return type(v) == "table" and Decl.Scroll:isclassof(v)
+end
+
+local function is_decl_scroll_control(v)
+    return type(v) == "table" and Decl.ScrollControl:isclassof(v)
+end
+
 local function is_decl_child(v)
     return type(v) == "table" and Decl.Child:isclassof(v)
 end
@@ -118,21 +126,50 @@ local function normalize_decor(props)
 end
 
 local function normalize_clip(props)
-    if props.clip and Decl.Clip:isclassof(props.clip) then return props.clip end
-    if props.horizontal or props.vertical or props.scroll_x or props.scroll_y then
-        return Decl.Clip(
-            props.horizontal or false,
-            props.vertical or false,
-            props.scroll_x and M.as_expr(props.scroll_x) or nil,
-            props.scroll_y and M.as_expr(props.scroll_y) or nil)
+    if props.scroll_x ~= nil or props.scroll_y ~= nil then
+        error("authored scroll_x/scroll_y are no longer part of the structural DSL")
     end
+    if props.clip and Decl.Clip:isclassof(props.clip) then return props.clip end
     if type(props.clip) == "table" then
         local c = props.clip
         return Decl.Clip(
             c.horizontal or false,
-            c.vertical or false,
-            c.child_offset_x and M.as_expr(c.child_offset_x) or nil,
-            c.child_offset_y and M.as_expr(c.child_offset_y) or nil)
+            c.vertical or false)
+    end
+    return nil
+end
+
+local function normalize_scroll(props)
+    if props.scroll and is_decl_scroll(props.scroll) then return props.scroll end
+
+    if type(props.scroll) == "table" then
+        local s = props.scroll
+        return Decl.Scroll(
+            s.horizontal or false,
+            s.vertical or false)
+    end
+
+    if props.__terraui_scroll_region then
+        return Decl.Scroll(
+            props.horizontal or false,
+            props.vertical or false)
+    end
+
+    return nil
+end
+
+local function normalize_target_id(target)
+    if target == nil then error("scroll target required") end
+    if is_scope(target) then return target:key() end
+    if type(target) == "string" then return Decl.Stable(target) end
+    if is_decl_id(target) then return target end
+    if type(target) == "table" and target.kind == "FloatById" then return target.id end
+    error("invalid scroll target")
+end
+
+local function normalize_scroll_control(props)
+    if props.scroll_control and is_decl_scroll_control(props.scroll_control) then
+        return props.scroll_control
     end
     return nil
 end
@@ -422,6 +459,8 @@ local function make_node(axis, props, leaf, children, defaults)
             props.align_y or Decl.AlignTop),
         normalize_decor(props),
         normalize_clip(props),
+        normalize_scroll(props),
+        normalize_scroll_control(props),
         normalize_floating(props),
         no_input(props, defaults.input),
         props.aspect_ratio and M.as_expr(props.aspect_ratio) or nil,
@@ -494,6 +533,35 @@ function M.dsl()
         by_id = function(id) return Decl.FloatById(normalize_id(id)) end,
     }
 
+    ui.scroll = {
+        axis = {
+            x = Decl.ScrollAxisX,
+            y = Decl.ScrollAxisY,
+        },
+        metric = function(target, kind)
+            return Decl.ScrollMetric(normalize_target_id(target), kind)
+        end,
+        offset_x = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollOffsetX) end,
+        offset_y = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollOffsetY) end,
+        viewport_w = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollViewportW) end,
+        viewport_h = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollViewportH) end,
+        content_w = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollContentW) end,
+        content_h = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollContentH) end,
+        max_x = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollMaxX) end,
+        max_y = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollMaxY) end,
+        need_x = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollNeedX) end,
+        need_y = function(target) return Decl.ScrollMetric(normalize_target_id(target), Decl.ScrollNeedY) end,
+        thumb = function(target, axis)
+            return Decl.ScrollControl(normalize_target_id(target), axis, Decl.ScrollThumbKind)
+        end,
+        page_dec = function(target, axis)
+            return Decl.ScrollControl(normalize_target_id(target), axis, Decl.ScrollPageDecKind)
+        end,
+        page_inc = function(target, axis)
+            return Decl.ScrollControl(normalize_target_id(target), axis, Decl.ScrollPageIncKind)
+        end,
+    }
+
     ui.scope = function(id)
         return make_scope(id)
     end
@@ -535,6 +603,30 @@ function M.dsl()
         return Decl.Call(fn, args)
     end
     ui.select = function(c, y, n) return Decl.Select(M.as_expr(c), M.as_expr(y), M.as_expr(n)) end
+
+    local function expr_bin(op, a, b)
+        return Decl.Binary(op, M.as_expr(a), M.as_expr(b))
+    end
+
+    local function scroll_need_expr(axis_metric_content, axis_metric_viewport)
+        return expr_bin(">", axis_metric_content, axis_metric_viewport)
+    end
+
+    local function scroll_bar_extent_expr(need_expr, extent)
+        return ui.select(need_expr, extent, 0)
+    end
+
+    local function scroll_thumb_len_expr(content_metric, viewport_metric, track_metric, min_thumb)
+        local proportional = ui.call("min", track_metric, ui.call("max", min_thumb, ui.call("*", track_metric, ui.call("/", viewport_metric, content_metric))))
+        return ui.select(expr_bin(">", content_metric, viewport_metric), proportional, track_metric)
+    end
+
+    local function scroll_thumb_pos_expr(offset_metric, max_metric, track_metric, thumb_len_metric)
+        return ui.select(
+            expr_bin(">", max_metric, 0),
+            ui.call("*", ui.call("-", track_metric, thumb_len_metric), ui.call("/", offset_metric, max_metric)),
+            0)
+    end
 
     ui.fragment = function(children)
         return { __terraui_fragment = true, children = children or {} }
@@ -674,12 +766,185 @@ function M.dsl()
 
     ui.scroll_region = function(props)
         props = props or {}
+        props.__terraui_scroll_region = true
         return function(children)
             return make_node(Decl.Column, props, nil, children, {
                 width = Decl.Grow(nil, nil),
                 height = Decl.Grow(nil, nil),
-                input = { wheel = true },
             })
+        end
+    end
+
+    ui.scroll_area = function(props)
+        props = props or {}
+        local horizontal = props.horizontal == true
+        local vertical = props.vertical ~= false
+        local bar_size = props.bar_size or 12
+        local min_thumb_size = props.min_thumb_size or 24
+        assert(props.key ~= nil, "scroll_area.key required")
+
+        return function(children)
+            local scope = ui.scope(props.key)
+            local viewport_target = "viewport"
+            local viewport_pad = normalize_padding(props.viewport_padding)
+            local vbar_padding = Decl.Padding(Decl.NumLit(0), viewport_pad.top, Decl.NumLit(0), viewport_pad.bottom)
+            local hbar_padding = Decl.Padding(viewport_pad.left, Decl.NumLit(0), viewport_pad.right, Decl.NumLit(0))
+            local need_y = vertical and ui.scroll.need_y(viewport_target) or false
+            local need_x = horizontal and ui.scroll.need_x(viewport_target) or false
+            local vbar_w = vertical and bar_size or 0
+            local hbar_h = horizontal and bar_size or 0
+
+            local function vbar()
+                local track_h = ui.scroll.viewport_h(viewport_target)
+                local content_h = ui.scroll.content_h(viewport_target)
+                local viewport_h = ui.scroll.viewport_h(viewport_target)
+                local max_y = ui.scroll.max_y(viewport_target)
+                local thumb_h = scroll_thumb_len_expr(content_h, viewport_h, track_h, min_thumb_size)
+                local top_h = scroll_thumb_pos_expr(ui.scroll.offset_y(viewport_target), max_y, track_h, thumb_h)
+                return ui.column {
+                    -- Overlay: float over the parent's right edge so the
+                    -- viewport always gets the full width.  This breaks the
+                    -- vbar-visibility ↔ viewport-width ↔ wrap-height cycle
+                    -- that previously required 3× layout iteration.
+                    target = ui.float.parent,
+                    element_point = ui.attach.right_top,
+                    parent_point = ui.attach.right_top,
+                    z_index = 1,
+                    width = ui.fixed(vbar_w),
+                    height = ui.grow(),
+                    gap = 0,
+                    padding = vbar_padding,
+                    background = props.scrollbar_background or ui.rgba(0.12, 0.13, 0.15, 1),
+                    border = props.scrollbar_border,
+                    visible_when = need_y,
+                } {
+                    ui.spacer {
+                        width = ui.fixed(vbar_w),
+                        height = ui.fixed(top_h),
+                        hover = true,
+                        press = true,
+                        cursor = props.track_cursor or props.thumb_cursor or "pointer",
+                        visible_when = need_y,
+                        scroll_control = ui.scroll.page_dec(viewport_target, ui.scroll.axis.y),
+                    },
+                    ui.spacer {
+                        width = ui.fixed(vbar_w),
+                        height = ui.fixed(thumb_h),
+                        background = props.thumb_background or ui.rgba(0.42, 0.46, 0.54, 1),
+                        border = props.thumb_border,
+                        radius = props.thumb_radius or ui.radius(4),
+                        hover = true,
+                        press = true,
+                        cursor = props.thumb_cursor or "pointer",
+                        visible_when = need_y,
+                        scroll_control = ui.scroll.thumb(viewport_target, ui.scroll.axis.y),
+                    },
+                    ui.spacer {
+                        width = ui.fixed(vbar_w),
+                        height = ui.grow(),
+                        hover = true,
+                        press = true,
+                        cursor = props.track_cursor or props.thumb_cursor or "pointer",
+                        visible_when = need_y,
+                        scroll_control = ui.scroll.page_inc(viewport_target, ui.scroll.axis.y),
+                    },
+                }
+            end
+
+            local function hbar()
+                local track_w = ui.scroll.viewport_w(viewport_target)
+                local content_w = ui.scroll.content_w(viewport_target)
+                local viewport_w = ui.scroll.viewport_w(viewport_target)
+                local max_x = ui.scroll.max_x(viewport_target)
+                local thumb_w = scroll_thumb_len_expr(content_w, viewport_w, track_w, min_thumb_size)
+                local left_w = scroll_thumb_pos_expr(ui.scroll.offset_x(viewport_target), max_x, track_w, thumb_w)
+                return ui.row {
+                    target = ui.float.parent,
+                    element_point = ui.attach.left_bottom,
+                    parent_point = ui.attach.left_bottom,
+                    z_index = 1,
+                    width = ui.grow(),
+                    height = ui.fixed(hbar_h),
+                    gap = 0,
+                    padding = hbar_padding,
+                    background = props.scrollbar_background or ui.rgba(0.12, 0.13, 0.15, 1),
+                    border = props.scrollbar_border,
+                    visible_when = need_x,
+                } {
+                    ui.spacer {
+                        width = ui.fixed(left_w),
+                        height = ui.fixed(hbar_h),
+                        hover = true,
+                        press = true,
+                        cursor = props.track_cursor or props.thumb_cursor or "pointer",
+                        visible_when = need_x,
+                        scroll_control = ui.scroll.page_dec(viewport_target, ui.scroll.axis.x),
+                    },
+                    ui.spacer {
+                        width = ui.fixed(thumb_w),
+                        height = ui.fixed(hbar_h),
+                        background = props.thumb_background or ui.rgba(0.42, 0.46, 0.54, 1),
+                        border = props.thumb_border,
+                        radius = props.thumb_radius or ui.radius(4),
+                        hover = true,
+                        press = true,
+                        cursor = props.thumb_cursor or "pointer",
+                        visible_when = need_x,
+                        scroll_control = ui.scroll.thumb(viewport_target, ui.scroll.axis.x),
+                    },
+                    ui.spacer {
+                        width = ui.grow(),
+                        height = ui.fixed(hbar_h),
+                        hover = true,
+                        press = true,
+                        cursor = props.track_cursor or props.thumb_cursor or "pointer",
+                        visible_when = need_x,
+                        scroll_control = ui.scroll.page_inc(viewport_target, ui.scroll.axis.x),
+                    },
+                }
+            end
+
+            local viewport_props = {
+                ref = "viewport",
+                width = ui.grow(),
+                height = ui.grow(),
+                horizontal = horizontal,
+                vertical = vertical,
+                gap = props.viewport_gap or props.gap or 0,
+                padding = props.viewport_padding,
+                background = props.viewport_background,
+                border = props.viewport_border,
+                radius = props.viewport_radius,
+                opacity = props.viewport_opacity,
+            }
+
+            local viewport = ui.scroll_region(viewport_props)(children)
+
+            -- Bars are floats — they overlay the viewport and don't affect
+            -- its width/height.  A zero-padding body wrapper ensures the
+            -- float anchor matches the viewport's dimensions exactly (the
+            -- outer container has user padding that would misalign the bars).
+            local body_children = { viewport }
+            if vertical then body_children[#body_children + 1] = vbar() end
+            if horizontal then body_children[#body_children + 1] = hbar() end
+
+            local body = ui.row {
+                width = ui.grow(),
+                height = ui.grow(),
+                gap = 0,
+            } (body_children)
+
+            return ui.row {
+                key = scope,
+                width = props.width or ui.grow(),
+                height = props.height or ui.grow(),
+                gap = 0,
+                padding = props.padding,
+                background = props.background,
+                border = props.border,
+                radius = props.radius,
+                opacity = props.opacity,
+            } { body }
         end
     end
 

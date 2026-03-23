@@ -1,7 +1,9 @@
 # TerraUI Builder API Reference
 
-Status: implementation-aligned v0.5  
+Status: design-target v0.6  
 Purpose: define the concrete public DSL/builders for TerraUI v1.
+
+Implementation note: the canonical design now models scrolling as first-class `Scroll` rather than clip child offsets. The current implementation still accepts authored `scroll_x` / `scroll_y` until migrated.
 
 ## Canonical companion docs
 
@@ -11,7 +13,7 @@ Purpose: define the concrete public DSL/builders for TerraUI v1.
 - `lib/dsl.t`
 - `lib/terraui.t`
 
-This document describes the **currently shipped** builder surface.
+This document describes the canonical builder surface after the scroll redesign, while calling out the current implementation where it still differs.
 
 ## 1. Style summary
 
@@ -271,7 +273,7 @@ Returns `Decl.Param`.
 
 ### Form
 ```lua
-ui.state("scroll_y") { type = ui.types.number, initial = 0 }
+ui.state("selected_index") { type = ui.types.number, initial = 0 }
 ```
 
 ### Required fields
@@ -543,8 +545,6 @@ Common supported props include:
 - `opacity`
 - `horizontal`
 - `vertical`
-- `scroll_x`
-- `scroll_y`
 - `target`
 - `float_target`
 - `element_point`
@@ -592,13 +592,21 @@ It is authoring sugar only in the current implementation.
 ### Current lowering
 - axis = `Column`
 - width/height default to `grow()`
-- `wheel = true` by default
-- `horizontal`, `vertical`, `scroll_x`, `scroll_y` lower into `Decl.Clip`
+- `horizontal`, `vertical` lower into `Decl.Scroll`
+- effective clip is implied on the same axes as scrolling
+- authored `scroll_x` / `scroll_y` are not part of the structural DSL
 
-### Important note
-The current implementation uses authored `scroll_x` / `scroll_y` expressions directly as clip child offsets.
+## 7.6 `ui.scroll_area { props } { children }`
 
-## 7.6 `ui.tooltip { props } { children }`
+### Current lowering
+- standard-library composite widget built around an internal `ui.scroll_region`
+- scrollbar bars/thumbs are regular nodes driven by `ui.scroll.*` metrics
+- track-before / track-after segments are explicit child nodes, so bar placement is structurally authored
+- bar visibility and reserved gutter size are driven by final viewport `need_x` / `need_y`
+- drag behavior and track paging lower through `scroll_control`
+- the runtime layout path performs a small fixed-point solve so X/Y scrollbar dependence converges within the same frame
+
+## 7.7 `ui.tooltip { props } { children }`
 
 ### Current lowering
 - axis = `Column`
@@ -695,6 +703,19 @@ ui.env(name)
 ui.param_ref(name)
 ui.state_ref(name)
 ui.prop_ref(name)
+ui.scroll.need_x(target)
+ui.scroll.need_y(target)
+ui.scroll.offset_x(target)
+ui.scroll.offset_y(target)
+ui.scroll.viewport_w(target)
+ui.scroll.viewport_h(target)
+ui.scroll.content_w(target)
+ui.scroll.content_h(target)
+ui.scroll.max_x(target)
+ui.scroll.max_y(target)
+ui.scroll.thumb(target, axis)
+ui.scroll.page_dec(target, axis)
+ui.scroll.page_inc(target, axis)
 ```
 
 ## 11. Public entrypoint helpers
@@ -758,6 +779,7 @@ ui.row { ... } { ... }
 ui.column { ... } { ... }
 ui.stack { ... } { ... }
 ui.scroll_region { ... } { ... }
+ui.scroll_area { ... } { ... }
 ui.tooltip { ... } { ... }
 
 ui.label { ... }

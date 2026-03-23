@@ -89,15 +89,13 @@ The node is one structural record containing:
 
 This avoids infecting the entire tree with a giant node-kind union.
 
-#### Clip is first-class
+#### Clip and scroll are first-class
 
-Later revisions replaced the older `Overflow` model with explicit `Clip`:
-- `horizontal`
-- `vertical`
-- optional `child_offset_x`
-- optional `child_offset_y`
+Later revisions replaced the older `Overflow` model with explicit `Clip`, and the current redesign further splits scrolling out into explicit `Scroll`:
+- `Clip(horizontal, vertical)` for structural viewport clipping
+- `Scroll(horizontal, vertical)` for runtime-backed content translation through that viewport
 
-This models clipping and scrolling as a structural feature of the node.
+This keeps clipping structural and scrolling behavioral.
 
 #### Aspect ratio is node-level
 
@@ -190,8 +188,7 @@ Final discussion settled on `Plan.Node` including at least:
 - axis, width rule, height rule
 - padding and gap bindings
 - alignment
-- slots for guard, paint, input, clip, text, image, custom, float
-- `has_aspect_ratio`
+- slots for guard, paint, input, clip, scroll, text, image, custom, float
 - optional `aspect_ratio` binding
 
 ### 6.5 Why `subtree_end` was added

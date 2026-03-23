@@ -1,7 +1,9 @@
 # TerraUI Full ASDL Specification
 
-Status: draft v0.3  
+Status: draft v0.4  
 Purpose: canonical companion document for the TerraUI ASDL.
+
+Implementation note: the canonical design target now includes a first-class `Scroll` concept distinct from `Clip`. The current implementation still uses the older clip-plus-offset model until the compiler/runtime are migrated.
 
 ## Canonical source
 
@@ -92,7 +94,13 @@ This is not a blind copy of the raw conversation. The final `.asdl` includes a f
 
 6. `aspect_ratio` is represented once as an optional binding, without a redundant `has_aspect_ratio` boolean.
 
-7. `Kernel.RuntimeTypes` includes `params_t` and `state_t` explicitly.
+7. The scroll redesign splits:
+   - structural viewport clipping in `Clip` / `ClipSpec`
+   - runtime-backed scrolling in `Scroll` / `ScrollSpec`
+
+8. `Plan.Node` now carries both `clip_slot` and `scroll_slot`.
+
+9. `Kernel.RuntimeTypes` includes `params_t` and `state_t` explicitly.
 
 ## 6. Main structural decisions reflected in the ASDL
 
@@ -100,9 +108,11 @@ This is not a blind copy of the raw conversation. The final `.asdl` includes a f
 
 The schema keeps one generic node record with optional features instead of a large node-kind union.
 
-### 6.2 First-class clip model
+### 6.2 First-class clip and scroll model
 
-`Clip` / `ClipSpec` are explicit schema elements rather than booleans smeared across node flags.
+`Clip` / `ClipSpec` remain explicit schema elements for structural viewport clipping.
+
+`Scroll` / `ScrollSpec` are now separate schema elements for runtime-backed content translation, wheel routing, and scroll-range logic.
 
 ### 6.3 Node-level aspect ratio
 
@@ -115,6 +125,7 @@ The schema keeps one generic node record with optional features instead of a lar
 - paints
 - inputs
 - clips
+- scrolls
 - texts
 - images
 - customs
@@ -134,10 +145,11 @@ flowchart TB
     A --> D[Paint table]
     A --> E[InputSpec table]
     A --> F[ClipSpec table]
-    A --> G[TextSpec table]
-    A --> H[ImageSpec table]
-    A --> I[CustomSpec table]
-    A --> J[FloatSpec table]
+    A --> G[ScrollSpec table]
+    A --> H[TextSpec table]
+    A --> I[ImageSpec table]
+    A --> J[CustomSpec table]
+    A --> K[FloatSpec table]
 ```
 
 ## 8. Validation rules that should accompany the ASDL
@@ -162,8 +174,9 @@ These are not all expressible directly in ASDL syntax, so they should be enforce
 
 1. `subtree_end` is an exclusive preorder end.
 2. Active clipping must cover the full subtree.
-3. `LeafSlots` are mutually exclusive in v1.
-4. Node-level `aspect_ratio` applies regardless of leaf kind.
+3. `ScrollSpec` is a separate side-table entry from `ClipSpec`; scrolling is not encoded as clip child offsets.
+4. `LeafSlots` are mutually exclusive in v1.
+5. Node-level `aspect_ratio` applies regardless of leaf kind.
 
 ### 7.4 Kernel-level rules
 

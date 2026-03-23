@@ -443,6 +443,12 @@ function Decl.EnvRef:bind(ctx)
     return Bound.EnvSlot(self.name)
 end
 
+function Decl.ScrollMetric:bind(ctx)
+    return Bound.ScrollMetric(
+        resolve_id(self.id, ctx, -1),
+        self.metric)
+end
+
 function Decl.Unary:bind(ctx)
     return Bound.Unary(self.op, self.rhs:bind(ctx))
 end
@@ -603,9 +609,20 @@ end
 function Decl.Clip:bind(ctx)
     return Bound.Clip(
         self.horizontal,
-        self.vertical,
-        self.child_offset_x and self.child_offset_x:bind(ctx) or nil,
-        self.child_offset_y and self.child_offset_y:bind(ctx) or nil)
+        self.vertical)
+end
+
+function Decl.Scroll:bind(ctx)
+    return Bound.Scroll(
+        self.horizontal,
+        self.vertical)
+end
+
+function Decl.ScrollControl:bind(ctx)
+    return Bound.ScrollControl(
+        resolve_id(self.target, ctx, -1),
+        self.axis,
+        self.kind)
 end
 
 function Decl.Floating:bind(ctx)
@@ -802,6 +819,8 @@ function Decl.Node:bind(ctx)
     local layout      = self.layout:bind(ctx)
     local decor       = self.decor:bind(ctx)
     local clip        = self.clip and self.clip:bind(ctx) or nil
+    local scroll      = self.scroll and self.scroll:bind(ctx) or nil
+    local scroll_control = self.scroll_control and self.scroll_control:bind(ctx) or nil
     local floating    = self.floating and self.floating:bind(ctx) or nil
     local input       = self.input:bind(ctx)
     local aspect_ratio = self.aspect_ratio
@@ -816,7 +835,7 @@ function Decl.Node:bind(ctx)
 
     return Bound.Node(
         local_id, stable_id, visibility, layout, decor,
-        clip, floating, input, aspect_ratio, leaf, children)
+        clip, scroll, scroll_control, floating, input, aspect_ratio, leaf, children)
 end
 
 ---------------------------------------------------------------------------

@@ -81,6 +81,8 @@ local schema TerraUI
             layout: Layout
             decor: Decor
             clip: Clip?
+            scroll: Scroll?
+            scroll_control: ScrollControl?
             floating: Floating?
             input: Input
             aspect_ratio: Expr?
@@ -189,8 +191,41 @@ local schema TerraUI
         record Clip
             horizontal: boolean
             vertical: boolean
-            child_offset_x: Expr?
-            child_offset_y: Expr?
+        end
+
+        record Scroll
+            horizontal: boolean
+            vertical: boolean
+        end
+
+        flags ScrollAxis
+            ScrollAxisX
+            ScrollAxisY
+        end
+
+        flags ScrollMetricKind
+            ScrollOffsetX
+            ScrollOffsetY
+            ScrollViewportW
+            ScrollViewportH
+            ScrollContentW
+            ScrollContentH
+            ScrollMaxX
+            ScrollMaxY
+            ScrollNeedX
+            ScrollNeedY
+        end
+
+        flags ScrollControlKind
+            ScrollThumbKind
+            ScrollPageDecKind
+            ScrollPageIncKind
+        end
+
+        record ScrollControl
+            target: Id
+            axis: ScrollAxis
+            kind: ScrollControlKind
         end
 
         record Floating
@@ -297,6 +332,7 @@ local schema TerraUI
             WidgetPropRef { name: string }
             ThemeRef { name: string }
             EnvRef { name: string }
+            ScrollMetric { id: Id, metric: ScrollMetricKind }
             Unary { op: string, rhs: Expr }
             Binary { op: string, lhs: Expr, rhs: Expr }
             Select { cond: Expr, yes: Expr, no: Expr }
@@ -316,6 +352,8 @@ local schema TerraUI
             Border:bind(ctx: BindCtx) -> Bound.Border
             CornerRadius:bind(ctx: BindCtx) -> Bound.CornerRadius
             Clip:bind(ctx: BindCtx) -> Bound.Clip
+            Scroll:bind(ctx: BindCtx) -> Bound.Scroll
+            ScrollControl:bind(ctx: BindCtx) -> Bound.ScrollControl
             Floating:bind(ctx: BindCtx) -> Bound.Floating
             Input:bind(ctx: BindCtx) -> Bound.Input
             Leaf:bind(ctx: BindCtx) -> Bound.Leaf
@@ -365,6 +403,8 @@ local schema TerraUI
             layout: Layout
             decor: Decor
             clip: Clip?
+            scroll: Scroll?
+            scroll_control: ScrollControl?
             floating: Floating?
             input: Input
             aspect_ratio: Value?
@@ -432,8 +472,17 @@ local schema TerraUI
         record Clip
             horizontal: boolean
             vertical: boolean
-            child_offset_x: Value?
-            child_offset_y: Value?
+        end
+
+        record Scroll
+            horizontal: boolean
+            vertical: boolean
+        end
+
+        record ScrollControl
+            target: ResolvedId
+            axis: Decl.ScrollAxis
+            kind: Decl.ScrollControlKind
         end
 
         record Floating
@@ -503,6 +552,7 @@ local schema TerraUI
             ParamSlot { slot: number }
             StateSlotRef { slot: number }
             EnvSlot { name: string }
+            ScrollMetric { id: ResolvedId, metric: Decl.ScrollMetricKind }
             Unary { op: string, rhs: Value }
             Binary { op: string, lhs: Value, rhs: Value }
             Select { cond: Value, yes: Value, no: Value }
@@ -514,6 +564,8 @@ local schema TerraUI
             Node:plan(ctx: PlanCtx, parent_index: number) -> number
             Size:plan(ctx: PlanCtx) -> Plan.SizeRule
             Clip:plan(ctx: PlanCtx, node_index: number) -> number
+            Scroll:plan(ctx: PlanCtx, node_index: number) -> number
+            ScrollControl:plan(ctx: PlanCtx, node_index: number) -> number
             Leaf:plan(ctx: PlanCtx, node_index: number) -> Plan.LeafSlots
             Value:plan_binding(ctx: PlanCtx) -> Plan.Binding
         end
@@ -527,6 +579,8 @@ local schema TerraUI
             paints: Paint*
             inputs: InputSpec*
             clips: ClipSpec*
+            scrolls: ScrollSpec*
+            scroll_controls: ScrollControlSpec*
             texts: TextSpec*
             images: ImageSpec*
             customs: CustomSpec*
@@ -555,6 +609,8 @@ local schema TerraUI
             paint_slot: number
             input_slot: number
             clip_slot: number?
+            scroll_slot: number?
+            scroll_control_slot: number?
             text_slot: number?
             image_slot: number?
             custom_slot: number?
@@ -610,8 +666,19 @@ local schema TerraUI
             node_index: number
             horizontal: boolean
             vertical: boolean
-            child_offset_x: Binding?
-            child_offset_y: Binding?
+        end
+
+        record ScrollSpec
+            node_index: number
+            horizontal: boolean
+            vertical: boolean
+        end
+
+        record ScrollControlSpec
+            node_index: number
+            target_node_index: number
+            axis: Decl.ScrollAxis
+            kind: Decl.ScrollControlKind
         end
 
         record TextSpec
@@ -667,6 +734,7 @@ local schema TerraUI
             Param { slot: number }
             State { slot: number }
             Env { name: string }
+            ScrollMetric { node_index: number, metric: Decl.ScrollMetricKind }
             Expr { op: string, args: Binding* }
         end
 
@@ -680,6 +748,9 @@ local schema TerraUI
             ClipSpec:compile_apply(ctx: CompileCtx) -> TerraQuote
             ClipSpec:compile_emit_begin(ctx: CompileCtx) -> TerraQuote
             ClipSpec:compile_emit_end(ctx: CompileCtx) -> TerraQuote
+            ScrollSpec:compile_apply(ctx: CompileCtx) -> TerraQuote
+            ScrollSpec:compile_input(ctx: CompileCtx) -> TerraQuote
+            ScrollControlSpec:compile_input(ctx: CompileCtx) -> TerraQuote
             TextSpec:compile_measure_width(ctx: CompileCtx) -> TerraQuote
             TextSpec:compile_measure_height_for_width(ctx: CompileCtx, max_width: TerraQuote) -> TerraQuote
             TextSpec:compile_emit(ctx: CompileCtx) -> TerraQuote

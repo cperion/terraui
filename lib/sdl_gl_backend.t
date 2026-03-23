@@ -507,34 +507,60 @@ local new_backend = terralib.memoize(function(font_path)
         input.wheel_dx = 0
         input.wheel_dy = 0
 
-        var mx: float, my: float
-        C.SDL_GetMouseState(&mx, &my)
-        input.mouse_x = mx
-        input.mouse_y = my
+        var have_mouse_pos = false
+        var event_mouse_x: float = input.mouse_x
+        var event_mouse_y: float = input.mouse_y
 
         var ev: C.SDL_Event
         while C.SDL_PollEvent(&ev) do
             if ev.type == [SDL_EVENT_QUIT] or ev.type == [SDL_EVENT_WINDOW_CLOSE_REQUESTED] then
                 @quit = true
             elseif ev.type == [SDL_EVENT_MOUSE_MOTION] then
-                input.mouse_x = ev.motion.x
-                input.mouse_y = ev.motion.y
+                event_mouse_x = ev.motion.x
+                event_mouse_y = ev.motion.y
+                have_mouse_pos = true
             elseif ev.type == [SDL_EVENT_MOUSE_BUTTON_DOWN] and ev.button.button == [SDL_BUTTON_LEFT] then
                 input.mouse_down = true
                 input.mouse_pressed = true
-                input.mouse_x = ev.button.x
-                input.mouse_y = ev.button.y
+                event_mouse_x = ev.button.x
+                event_mouse_y = ev.button.y
+                have_mouse_pos = true
             elseif ev.type == [SDL_EVENT_MOUSE_BUTTON_UP] and ev.button.button == [SDL_BUTTON_LEFT] then
                 input.mouse_down = false
                 input.mouse_released = true
-                input.mouse_x = ev.button.x
-                input.mouse_y = ev.button.y
+                event_mouse_x = ev.button.x
+                event_mouse_y = ev.button.y
+                have_mouse_pos = true
             elseif ev.type == [SDL_EVENT_MOUSE_WHEEL] then
-                input.wheel_dx = ev.wheel.x
-                input.wheel_dy = ev.wheel.y
-                input.mouse_x = ev.wheel.mouse_x
-                input.mouse_y = ev.wheel.mouse_y
+                var wx = ev.wheel.x
+                var wy = ev.wheel.y
+                if ev.wheel.integer_x ~= 0 then wx = [float](ev.wheel.integer_x) end
+                if ev.wheel.integer_y ~= 0 then wy = [float](ev.wheel.integer_y) end
+                if ev.wheel.direction == C.SDL_MOUSEWHEEL_FLIPPED then
+                    wx = -wx
+                    wy = -wy
+                end
+                -- SDL docs:
+                --   x > 0 => scrolled right
+                --   y > 0 => scrolled away from the user
+                --   FLIPPED means the reported values are opposite and should be negated.
+                -- After normalizing FLIPPED, keep SDL's canonical wheel signs here.
+                input.wheel_dx = input.wheel_dx + wx
+                input.wheel_dy = input.wheel_dy + wy
+                event_mouse_x = ev.wheel.mouse_x
+                event_mouse_y = ev.wheel.mouse_y
+                have_mouse_pos = true
             end
+        end
+
+        if have_mouse_pos then
+            input.mouse_x = event_mouse_x
+            input.mouse_y = event_mouse_y
+        else
+            var mx: float, my: float
+            C.SDL_GetMouseState(&mx, &my)
+            input.mouse_x = mx
+            input.mouse_y = my
         end
 
         var vw: int, vh: int
@@ -550,7 +576,7 @@ local new_backend = terralib.memoize(function(font_path)
         local push_packets = terra(frame: &frame_t, packets: &Packet, base: int32, kind: int32, count: int32) : int32
             var n = base
             if kind == 1 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.rects[i].z
@@ -558,7 +584,7 @@ local new_backend = terralib.memoize(function(font_path)
                     n = n + 1
                 end
             elseif kind == 2 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.borders[i].z
@@ -566,7 +592,7 @@ local new_backend = terralib.memoize(function(font_path)
                     n = n + 1
                 end
             elseif kind == 3 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.texts[i].z
@@ -574,7 +600,7 @@ local new_backend = terralib.memoize(function(font_path)
                     n = n + 1
                 end
             elseif kind == 4 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.images[i].z
@@ -582,7 +608,7 @@ local new_backend = terralib.memoize(function(font_path)
                     n = n + 1
                 end
             elseif kind == 5 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.scissors[i].z
@@ -590,7 +616,7 @@ local new_backend = terralib.memoize(function(font_path)
                     n = n + 1
                 end
             elseif kind == 6 then
-                for i = 0, count do
+                for i = 0, count - 1 do
                     packets[n].kind = kind
                     packets[n].index = i
                     packets[n].z = frame.customs[i].z
@@ -610,7 +636,7 @@ local new_backend = terralib.memoize(function(font_path)
             n = push_packets(frame, packets, n, 5, frame.scissor_count)
             n = push_packets(frame, packets, n, 6, frame.custom_count)
 
-            for i = 1, n do
+            for i = 1, n - 1 do
                 var key = packets[i]
                 var j = i
                 while j > 0 and packet_before(key, packets[j - 1]) do
@@ -632,7 +658,7 @@ local new_backend = terralib.memoize(function(font_path)
 
             begin_frame(session, vw, vh)
 
-            for i = 0, packet_count do
+            for i = 0, packet_count - 1 do
                 var p = packets[i]
                 if p.kind == 5 then
                     var cmd = frame.scissors[p.index]

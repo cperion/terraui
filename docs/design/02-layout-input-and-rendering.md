@@ -1,7 +1,9 @@
 # TerraUI Layout, Input, and Rendering Semantics
 
-Status: draft v0.2  
+Status: draft v0.3  
 Source basis: final layout/codegen revisions in `starter-conv.txt`.
+
+Implementation note: the canonical design now separates structural clip from runtime-backed scroll. The current implementation still uses the older clip-plus-offset model until migrated.
 
 ## 1. Purpose
 
@@ -22,7 +24,7 @@ The intended layout model is Clay-like:
 - x/y alignment
 - measured text leaves
 - aspect-ratio constrained nodes
-- clip and child offsets
+- clip and scroll-area behavior
 - floating attachment points
 
 ## 3. Layout pass structure
@@ -37,7 +39,7 @@ flowchart TB
     D --> E[Resolve node width/height rules]
     E --> F[Apply node aspect ratio if needed]
     F --> G[Set content rect]
-    G --> H[Apply clip child offsets]
+    G --> H[Apply runtime scroll translation if present]
     H --> I[Resolve child grow allocation]
     I --> J[Place children]
     J --> K[Apply floating overrides where needed]
@@ -103,32 +105,59 @@ This is explicitly better than tying aspect ratio to images only.
 
 Clipping is represented by `ClipSpec`, not by ad hoc booleans on nodes.
 
-A clip region says:
+A clip region says only:
 - whether horizontal clipping is active
 - whether vertical clipping is active
-- whether children are offset in x and/or y
 
-## 7.2 Child offsets
+`ClipSpec` owns viewport clipping and subtree-scoped scissor bracketing.
+It does **not** own content translation.
 
-Clip application affects child space, not the node box itself.
+## 7.2 Scroll is a first-class viewport behavior
+
+Scrolling is represented separately by `ScrollSpec`.
+
+A scroll region says:
+- whether horizontal scrolling is enabled
+- whether vertical scrolling is enabled
+- that runtime state supplies current `scroll_x` / `scroll_y`
+- that child placement is translated through the node viewport
+
+This keeps clipping and scrolling conceptually separate.
+
+## 7.3 Viewport size vs content extent
+
+A scroll area must distinguish:
+- viewport size — the node's actual content box
+- content extent — the laid out descendant flow size before scroll translation
+
+That distinction is required for:
+- max-scroll computation
+- runtime offset clamping
+- future scrollbar geometry
+- correct answers to whether scrolling is needed
+
+## 7.4 Runtime scroll offsets
+
+Actual scroll offsets live in runtime state rather than authored layout expressions.
+
+So:
+- `Decl` / `Bound` / `Plan` describe that a node is scrollable
+- runtime state provides current offsets
+- compile context exposes helpers like `get_scroll_offset_x/y`
+- layout logic clamps those offsets against content extent
+
+## 7.5 Child placement with scrolling
 
 The intended rule is:
 - compute node box
 - compute content box
-- if clip has offsets, subtract them from `content_x` / `content_y` as appropriate
+- compute descendant content extent
+- fetch and clamp runtime scroll offsets
+- translate child placement origin by `-scroll_x` / `-scroll_y` on enabled axes
 
-This keeps clipping/scrolling out of paint logic.
+This keeps subtree scissor ownership with clip, while letting scroll own content translation.
 
-## 7.3 Runtime scroll offsets
-
-One of the final design choices is that actual scroll offsets should live in runtime state rather than authoring/layout config.
-
-So:
-- `Decl` / `Bound` describe a clipped region structurally
-- runtime state provides actual offsets when needed
-- compile context may expose helpers like `get_scroll_offset_x/y`
-
-## 7.4 Why clip begin/end cannot be paint-local
+## 7.6 Why clip begin/end cannot be paint-local
 
 A critical later correction in the conversation:
 
@@ -303,18 +332,19 @@ flowchart LR
 
 ## 17. Critical correctness rules
 
-1. Clip applies to child coordinate space before child placement.
-2. Clip scissor spans the whole subtree.
+1. Clip scissor spans the whole subtree.
+2. Scroll translates child placement through the viewport; it is not encoded as clip child offsets.
 3. Hit testing intersects against ancestor clip regions.
 4. Stream separation must not destroy authored draw order.
 5. Runtime scroll offsets are a runtime concern, not an authored layout concern.
-6. Aspect ratio is solved at node level, not per-leaf special cases.
+6. Scroll range must be derived from content extent vs viewport size.
+7. Aspect ratio is solved at node level, not per-leaf special cases.
 
 ## 18. Intended v1 behavior
 
 The initial demo should exercise all of the above with:
 - toolbar row
-- clipped left scroll panel
+- left scroll viewport with runtime-managed offset
 - right inspector panel
 - image preview node with aspect ratio
 - floating tooltip

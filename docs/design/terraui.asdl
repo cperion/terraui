@@ -11,6 +11,7 @@
 --   * ASDL method declarations are part of the schema surface.
 --   * Root-node lowering may pass parent_index = -1 as an internal lowering convention.
 --   * Optional slots in Plan use ? fields rather than compile-time sentinel values.
+--   * This file is the canonical design target; current implementation may temporarily trail it during redesign work.
 
 extern TerraType
 extern TerraQuote
@@ -81,6 +82,7 @@ module Decl {
         Decl.Layout layout,
         Decl.Decor decor,
         Decl.Clip? clip,
+        Decl.Scroll? scroll,
         Decl.Floating? floating,
         Decl.Input input,
         Decl.Expr? aspect_ratio,
@@ -196,12 +198,18 @@ module Decl {
 
     Clip = (
         boolean horizontal,
-        boolean vertical,
-        Decl.Expr? child_offset_x,
-        Decl.Expr? child_offset_y
+        boolean vertical
     )
     methods {
         bind(BindCtx ctx) -> Bound.Clip
+    }
+
+    Scroll = (
+        boolean horizontal,
+        boolean vertical
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.Scroll
     }
 
     Floating = (
@@ -359,6 +367,7 @@ module Bound {
         Bound.Layout layout,
         Bound.Decor decor,
         Bound.Clip? clip,
+        Bound.Scroll? scroll,
         Bound.Floating? floating,
         Bound.Input input,
         Bound.Value? aspect_ratio,
@@ -430,9 +439,15 @@ module Bound {
 
     Clip = (
         boolean horizontal,
-        boolean vertical,
-        Bound.Value? child_offset_x,
-        Bound.Value? child_offset_y
+        boolean vertical
+    )
+    methods {
+        plan(PlanCtx ctx, number node_index) -> number
+    }
+
+    Scroll = (
+        boolean horizontal,
+        boolean vertical
     )
     methods {
         plan(PlanCtx ctx, number node_index) -> number
@@ -523,6 +538,7 @@ module Plan {
         Plan.Paint* paints,
         Plan.InputSpec* inputs,
         Plan.ClipSpec* clips,
+        Plan.ScrollSpec* scrolls,
         Plan.TextSpec* texts,
         Plan.ImageSpec* images,
         Plan.CustomSpec* customs,
@@ -555,6 +571,7 @@ module Plan {
         number paint_slot,
         number input_slot,
         number? clip_slot,
+        number? scroll_slot,
         number? text_slot,
         number? image_slot,
         number? custom_slot,
@@ -622,14 +639,22 @@ module Plan {
     ClipSpec = (
         number node_index,
         boolean horizontal,
-        boolean vertical,
-        Plan.Binding? child_offset_x,
-        Plan.Binding? child_offset_y
+        boolean vertical
     )
     methods {
         compile_apply(CompileCtx ctx) -> TerraQuote
         compile_emit_begin(CompileCtx ctx) -> TerraQuote
         compile_emit_end(CompileCtx ctx) -> TerraQuote
+    }
+
+    ScrollSpec = (
+        number node_index,
+        boolean horizontal,
+        boolean vertical
+    )
+    methods {
+        compile_apply(CompileCtx ctx) -> TerraQuote
+        compile_input(CompileCtx ctx) -> TerraQuote
     }
 
     TextSpec = (

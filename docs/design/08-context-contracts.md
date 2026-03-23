@@ -1,7 +1,9 @@
 # TerraUI Context Contracts
 
-Status: draft v0.3  
+Status: draft v0.4  
 Purpose: define the semantic contract for `BindCtx`, `PlanCtx`, and `CompileCtx` used by the TerraUI compiler pipeline.
+
+Implementation note: the canonical design now expects first-class `Scroll` / `ScrollSpec` support. The current implementation still uses the older clip-plus-offset scroll model until migrated.
 
 ## Canonical schema
 
@@ -410,6 +412,11 @@ CompileCtx = {
     get_scroll_offset_y = function(self, frame_q, node_index) -> TerraQuote end,
     set_scroll_offset_x = function(self, frame_q, node_index, value_q) -> TerraQuote end,
     set_scroll_offset_y = function(self, frame_q, node_index, value_q) -> TerraQuote end,
+
+    get_scroll_extent_w = function(self, frame_q, node_index) -> TerraQuote end,
+    get_scroll_extent_h = function(self, frame_q, node_index) -> TerraQuote end,
+    set_scroll_extent_w = function(self, frame_q, node_index, value_q) -> TerraQuote end,
+    set_scroll_extent_h = function(self, frame_q, node_index, value_q) -> TerraQuote end,
 }
 ```
 
@@ -544,22 +551,28 @@ Construct backend-specific concrete command values from generic plan data.
 - generated command data preserves semantics from Plan
 - output contains enough data for backend replay and ordering
 
-## 6.9 Optional runtime scroll helpers
+## 6.9 Runtime scroll helpers
 
 ### Methods
 - `get_scroll_offset_x(frame_q, node_index)`
 - `get_scroll_offset_y(frame_q, node_index)`
 - `set_scroll_offset_x(frame_q, node_index, value_q)`
 - `set_scroll_offset_y(frame_q, node_index, value_q)`
+- `get_scroll_extent_w(frame_q, node_index)`
+- `get_scroll_extent_h(frame_q, node_index)`
+- `set_scroll_extent_w(frame_q, node_index, value_q)`
+- `set_scroll_extent_h(frame_q, node_index, value_q)`
 
 ### Purpose
-Support runtime-managed scroll offsets when scrolling is modeled as runtime state.
+Support runtime-managed scroll offsets and content extents when scrolling is modeled as a first-class runtime viewport behavior.
 
 ### Required behavior
 - map node index to runtime scroll state storage
 - preserve deterministic semantics
+- provide enough storage/query surface for clamp logic based on viewport size versus content extent
 
 ### Must guarantee
+- scroll offsets and extents are readable by layout/input codegen
 - absent scroll support is either impossible in the chosen backend mode or fails clearly if called
 
 ## 6.10 Memoization contract

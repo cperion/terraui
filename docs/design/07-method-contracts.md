@@ -1,7 +1,9 @@
 # TerraUI Method Contracts
 
-Status: draft v0.3  
+Status: draft v0.4  
 Purpose: define the required semantics of every method declared in `docs/design/terraui.asdl`.
+
+Implementation note: the canonical design now splits structural `Clip` from runtime-backed `Scroll`. The current implementation still ships the older clip-plus-offset scroll model until migrated.
 
 ## Canonical schema
 
@@ -123,7 +125,7 @@ As of the current implementation:
 - fit/grow/fixed/percent sizing
 - alignment
 - aspect ratio
-- clip child offsets
+- structural clip application (current implementation still uses clip child offsets during the pre-migration period)
 - floating placement
 - hit testing
 - basic input transitions
@@ -324,16 +326,31 @@ Bind corner radius expressions.
 
 ### Purpose
 
-Bind clip structure and optional child offsets.
+Bind structural viewport clipping.
 
 ### Required behavior
 
-- preserve horizontal/vertical clip flags
-- bind optional child offsets
+- preserve horizontal/vertical clip flags only
+- do not bind child offsets or authored scroll expressions
 
 ### Validation expectations
 
 - clip with both axes disabled should be rejected or warned
+
+## 4.12a `Decl.Scroll:bind(BindCtx) -> Bound.Scroll`
+
+### Purpose
+
+Bind authored scroll-viewport structure.
+
+### Required behavior
+
+- preserve horizontal/vertical scroll-enabled axes
+- do not capture runtime offsets from authored expressions
+
+### Validation expectations
+
+- scroll with both axes disabled should be rejected
 
 ## 4.13 `Decl.Floating:bind(BindCtx) -> Bound.Floating`
 
@@ -474,7 +491,7 @@ Flatten a single bound node into the planner and return its node index.
 
 - reserve a node index
 - allocate guard/paint/input slots
-- allocate optional clip/leaf/float slots
+- allocate optional clip/scroll/leaf/float slots
 - bind stable id to node index
 - lower children in preorder
 - compute `subtree_end`
@@ -510,6 +527,18 @@ Create a `Plan.ClipSpec` for the node and return its slot index.
 ### Must guarantee
 
 - `ClipSpec.node_index` matches the owning node
+- the result encodes structural viewport clipping only
+
+## 5.4a `Bound.Scroll:plan(PlanCtx, number node_index) -> number`
+
+### Purpose
+
+Create a `Plan.ScrollSpec` for the node and return its slot index.
+
+### Must guarantee
+
+- `ScrollSpec.node_index` matches the owning node
+- scrolling is represented explicitly rather than as clip child offsets
 
 ## 5.5 `Bound.Leaf:plan(PlanCtx, number node_index) -> Plan.LeafSlots`
 
@@ -580,14 +609,14 @@ Generate the layout logic for one planned node.
 - resolve width/height by size rule
 - apply node aspect ratio when present
 - compute content rect
-- apply clip child offsets when present
+- cooperate with `ScrollSpec`-owned child-space translation when present
 - place children deterministically
 - cooperate with text/image intrinsic measurement paths
 
 ### Must guarantee
 
 - respects node-local layout semantics
-- respects clip child-space semantics
+- does not encode scrolling as clip child offsets
 - does not emit rendering commands directly unless the architecture explicitly couples them later
 
 ## 6.3 `Plan.Node:compile_hit(CompileCtx) -> TerraQuote`
@@ -653,21 +682,48 @@ Generate interaction logic for one node’s input policy.
 - handle hover/press/focus/wheel flags
 - respect node visibility/enabled state
 - cooperate with runtime input record format
+- not own scroll-wheel viewport translation by itself
 
 ### Current implementation note
 
-Basic press/release/focus/action behavior is implemented. Wheel-specific runtime behavior is not yet fleshed out.
+Basic press/release/focus/action behavior is implemented. Wheel-specific scroll viewport behavior is not yet separated into its own `ScrollSpec` path.
 
 ## 6.7 `Plan.ClipSpec:compile_apply(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
-Apply clip child offsets into node content space.
+Apply structural viewport clip bounds.
 
 ### Required behavior
 
-- adjust child/content origin, not parent outer box
-- read runtime scroll helpers if clip offsets are runtime-managed
+- intersect effective clip bounds against the node content box on enabled axes
+- not translate child/content origin
+
+## 6.7a `Plan.ScrollSpec:compile_apply(CompileCtx) -> TerraQuote`
+
+### Purpose
+
+Apply runtime-backed scrolling semantics for one node viewport.
+
+### Required behavior
+
+- fetch runtime scroll offsets
+- clamp them against content extent versus viewport size
+- translate child placement origin on enabled axes
+- preserve deterministic runtime behavior
+
+## 6.7b `Plan.ScrollSpec:compile_input(CompileCtx) -> TerraQuote`
+
+### Purpose
+
+Generate wheel/input handling for one scroll viewport.
+
+### Required behavior
+
+- identify whether this viewport is eligible for the current wheel input
+- update runtime scroll offsets deterministically
+- clamp after update
+- cooperate with hit-testing and deepest-hovered-node routing policy
 
 ## 6.8 `Plan.ClipSpec:compile_emit_begin(CompileCtx) -> TerraQuote`
 

@@ -37,13 +37,13 @@ The recommended first demo is an inspector/editor-style UI with:
 ```mermaid
 flowchart TB
     A[Demo component] --> B[toolbar buttons]
-    A --> C[left clipped scroll panel]
+    A --> C[left scroll viewport]
     A --> D[right inspector rows]
     A --> E[image preview]
     A --> F[floating tooltip]
 
     B --> G[hover / active / focus]
-    C --> H[clip + child offset + wheel]
+    C --> H[clip viewport + runtime scroll + wheel]
     D --> I[text measurement + row layout]
     E --> J[aspect ratio + image command]
     F --> K[floating placement + z ordering]
@@ -120,7 +120,7 @@ sequenceDiagram
 If the demo works, TerraUI will have validated:
 - the full phase pipeline
 - Clay-like layout behavior
-- clip and scroll offsets
+- structural clip plus runtime-backed scroll viewports
 - floating attachments
 - compiled hit testing
 - split render streams
@@ -139,10 +139,10 @@ How do you want authored UI to look in user code?
 - a Dear ImGui-like function call style that lowers into `Decl.Node`
 
 ### Q2. Scroll state ownership
-Should scroll offsets be:
-- always runtime-managed by TerraUI
-- always user-managed via state slots
-- hybrid, where `ClipSpec` defaults to runtime scroll state but can also use explicit bound expressions
+This is now largely resolved at the design level:
+- structural scroll is authored via `Scroll`
+- runtime offsets are runtime-managed state, not authored expressions
+- the remaining open question is only the concrete runtime API surface for host-side programmatic control
 
 ### Q3. Action dispatch model
 For `Input.action`, do you want actions to be:
@@ -175,7 +175,7 @@ or do you already want:
 - shaping and fallback behavior that will constrain the backend contract now
 
 ### Q8. Scroll clipping policy
-When a node has `Clip(horizontal, vertical, ...)`, should hit testing outside the visible clipped region always be suppressed, even if child geometry exists there? The current design assumes yes.
+When a node has an effective clip viewport, should hit testing outside the visible clipped region always be suppressed, even if child geometry exists there? The current design assumes yes.
 
 ### Q9. Z model
 Should z be:
