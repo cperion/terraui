@@ -358,7 +358,7 @@ The current `lib/compile.t` implementation already provides:
 
 Still intentionally partial:
 - command constructor/layout APIs are currently encoded directly in `lib/compile.t` rather than exposed as a fully factored backend surface
-- the default bundled text measurer is still an approximate backend, but it now sits behind the same pluggable `CompileCtx.text_measurer` contract as real backends
+- the default bundled text backend is still approximate, but it now sits behind the same pluggable `CompileCtx.text_backend` contract as real backends
 
 ## 6.2 CompileCtx contract surface
 
@@ -392,7 +392,7 @@ CompileCtx = {
     color_literal     = function(self, r, g, b, a) -> TerraQuote end,
     vec2_literal      = function(self, x, y) -> TerraQuote end,
 
-    text_measurer = {
+    text_backend = {
         key = string,
         measure_width = function(self, ctx, text_spec) -> TerraQuote end,
         measure_height_for_width = function(self, ctx, text_spec, max_width_q) -> TerraQuote end,
@@ -417,7 +417,7 @@ CompileCtx = {
 
 The current implementation has the same overall role, but a narrower concrete shape:
 - most services are implemented as direct methods/helpers inside `lib/compile.t`
-- text measurement is now factored through `CompileCtx.text_measurer`
+- text measurement is now factored through `CompileCtx.text_backend`
 - command structs are synthesized directly rather than via a fully abstract backend callback layer
 - the future fully-factored backend surface above is still the intended long-term contract
 
@@ -507,8 +507,8 @@ Provide backend-compatible literal construction helpers.
 
 ## 6.7 Text measurement service
 
-### `text_measurer.measure_width(ctx, text_spec) -> TerraQuote`
-### `text_measurer.measure_height_for_width(ctx, text_spec, max_width_q) -> TerraQuote`
+### `text_backend.measure_width(ctx, text_spec) -> TerraQuote`
+### `text_backend.measure_height_for_width(ctx, text_spec, max_width_q) -> TerraQuote`
 
 ### Purpose
 Provide Terra-visible text measurement support during code generation.
@@ -522,7 +522,8 @@ Provide Terra-visible text measurement support during code generation.
 ### Must guarantee
 - returned quotes are usable in layout code
 - text shaping still remains outside the kernel for v1
-- equal measurer identity should produce stable compile memoization keys
+- equal backend identity should produce stable compile memoization keys
+- runtime-owned backend/session state may be accessed through `frame.text_backend_state` without changing the canonical IR
 
 ## 6.8 Command constructor methods
 

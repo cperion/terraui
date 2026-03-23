@@ -35,7 +35,7 @@ function M.plan(bound_component)
 end
 
 local function compile_sig(plan_component, opts)
-    return tostring(plan_component.key) .. "|text=" .. compile.text_measurer_key(opts and opts.text_measurer)
+    return tostring(plan_component.key)
 end
 
 function M.compile_plan(plan_component, opts)

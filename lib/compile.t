@@ -252,16 +252,16 @@ local function text_align_code(align)
     return TEXT_ALIGN_LEFT
 end
 
-local ApproxTextMeasurer = { key = "approx-v1" }
+local DefaultTextBackend = { key = "default" }
 
-function ApproxTextMeasurer:measure_width(ctx, spec)
+function DefaultTextBackend:measure_width(ctx, spec)
     local content = spec.content:compile_string(ctx)
     local font_size = spec.font_size:compile_number(ctx)
     local letter_spacing = spec.letter_spacing:compile_number(ctx)
     return `approx_text_max_explicit_line_width([content], [font_size], [letter_spacing])
 end
 
-function ApproxTextMeasurer:measure_height_for_width(ctx, spec, max_width)
+function DefaultTextBackend:measure_height_for_width(ctx, spec, max_width)
     local content = spec.content:compile_string(ctx)
     local font_size = spec.font_size:compile_number(ctx)
     local letter_spacing = spec.letter_spacing:compile_number(ctx)
@@ -279,13 +279,13 @@ function ApproxTextMeasurer:measure_height_for_width(ctx, spec, max_width)
     return `[float]([line_count]) * [font_size] * [line_height]
 end
 
-local function text_measurer_key(measurer)
-    if type(measurer) == "table" and measurer.key ~= nil then
-        return tostring(measurer.key)
-    elseif measurer ~= nil then
-        return tostring(measurer)
+local function text_backend_key(backend)
+    if type(backend) == "table" and backend.key ~= nil then
+        return tostring(backend.key)
+    elseif backend ~= nil then
+        return tostring(backend)
     end
-    return tostring(ApproxTextMeasurer.key)
+    return tostring(DefaultTextBackend.key)
 end
 
 ---------------------------------------------------------------------------
@@ -299,10 +299,19 @@ function CompileCtx.new(plan_component, opts)
     opts = opts or {}
     local pc  = plan_component
     local key = pc.key
-    local text_measurer = opts.text_measurer or ApproxTextMeasurer
-    assert(type(text_measurer) == "table", "compile.text_measurer must be a table")
-    assert(type(text_measurer.measure_width) == "function", "compile.text_measurer.measure_width required")
-    assert(type(text_measurer.measure_height_for_width) == "function", "compile.text_measurer.measure_height_for_width required")
+    local text_backend = opts.text_backend
+    if text_backend == nil then
+        if key.text_backend == nil or key.text_backend == "default" then
+            text_backend = DefaultTextBackend
+        else
+            error("compile.text_backend required for specialization: " .. tostring(key.text_backend))
+        end
+    end
+    assert(type(text_backend) == "table", "compile.text_backend must be a table")
+    assert(type(text_backend.measure_width) == "function", "compile.text_backend.measure_width required")
+    assert(type(text_backend.measure_height_for_width) == "function", "compile.text_backend.measure_height_for_width required")
+    assert(text_backend_key(text_backend) == tostring(key.text_backend),
+        "compile.text_backend key mismatch: expected " .. tostring(key.text_backend) .. ", got " .. text_backend_key(text_backend))
 
     local params_t = terralib.types.newstruct("Params")
     for _, p in ipairs(key.params) do
@@ -350,6 +359,7 @@ function CompileCtx.new(plan_component, opts)
     frame_t.entries:insert({ field = "nodes",       type = node_t[node_count] })
     frame_t.entries:insert({ field = "input",       type = input_t })
     frame_t.entries:insert({ field = "hit",         type = hit_t })
+    frame_t.entries:insert({ field = "text_backend_state", type = &opaque })
     frame_t.entries:insert({ field = "viewport_w",  type = float })
     frame_t.entries:insert({ field = "viewport_h",  type = float })
     frame_t.entries:insert({ field = "draw_seq",    type = uint32 })
@@ -389,16 +399,16 @@ function CompileCtx.new(plan_component, opts)
         frame_t         = frame_t,
         node_count      = node_count,
         frame_sym       = frame_sym,
-        text_measurer   = text_measurer,
+        text_backend    = text_backend,
     }, CompileCtx)
 end
 
 function CompileCtx:measure_text_width(spec)
-    return self.text_measurer:measure_width(self, spec)
+    return self.text_backend:measure_width(self, spec)
 end
 
 function CompileCtx:measure_text_height_for_width(spec, max_width)
-    return self.text_measurer:measure_height_for_width(self, spec, max_width)
+    return self.text_backend:measure_height_for_width(self, spec, max_width)
 end
 
 ---------------------------------------------------------------------------
@@ -1560,6 +1570,7 @@ function Plan.Component:compile(ctx)
         frame.action_node = -1
         frame.action_name = nil
         frame.cursor_name = nil
+        frame.text_backend_state = nil
         frame.hit.hot = -1
         frame.hit.active = -1
         frame.hit.focus = -1
@@ -1633,8 +1644,8 @@ local M = {}
 M.CompileCtx = CompileCtx
 M.Color      = Color
 M.Vec2       = Vec2
-M.default_text_measurer = ApproxTextMeasurer
-M.text_measurer_key = text_measurer_key
+M.default_text_backend = DefaultTextBackend
+M.text_backend_key = text_backend_key
 M.NodeState  = NodeState
 M.NodeRect   = NodeState -- compatibility alias with earlier tests/notes
 M.RectCmd    = RectCmd

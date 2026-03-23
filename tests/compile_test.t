@@ -78,7 +78,7 @@ local function make_label(name, text, font_size, wrap, width)
 end
 
 local function full_pipeline(decl_comp, compile_opts)
-    local b = bind.bind_component(decl_comp)
+    local b = bind.bind_component(decl_comp, compile_opts)
     local p = plan.plan_component(b)
     return compile.compile_component(p, compile_opts)
 end
@@ -1137,16 +1137,16 @@ end
 ---------------------------------------------------------------------------
 
 do
-    local custom_measurer = { key = "test-measurer-v1" }
-    function custom_measurer:measure_width(ctx, spec)
+    local custom_text_backend = { key = "test-backend-v1" }
+    function custom_text_backend:measure_width(ctx, spec)
         return `200.0f
     end
-    function custom_measurer:measure_height_for_width(ctx, spec, max_width)
+    function custom_text_backend:measure_height_for_width(ctx, spec, max_width)
         return `[max_width] + 7.0f
     end
 
     local k = full_pipeline(component(
-        "custom_text_measurer", List(), List(),
+        "custom_text_backend", List(), List(),
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil),
             nil, nil,
@@ -1162,7 +1162,7 @@ do
                         make_label("lbl", "Hello world", 10, Decl.WrapWords, Decl.Grow(nil, nil)),
                     }),
             })),
-        { text_measurer = custom_measurer })
+        { text_backend = custom_text_backend })
 
     local Frame = k:frame_type()
     local layout_q = k.kernels.layout_fn
@@ -1178,7 +1178,7 @@ do
     end
 
     assert(test() == 0, "test 25 failed at " .. tostring(test()))
-    print("  test 25 (custom text measurer): ok")
+    print("  test 25 (custom text backend): ok")
 end
 
 ---------------------------------------------------------------------------

@@ -34,7 +34,7 @@ This repository currently contains:
 
 The repository now includes a runnable AOT demo path: Terra is used as the compiler, and the produced executable runs SDL3 + OpenGL directly.
 
-Text wrapping is modeled at the TerraUI level and measured through a pluggable compile-time `text_measurer` service. The default measurer is approximate; the SDL demo installs an SDL_ttf-backed measurer so wrapped layout and wrapped rendering use the same backend.
+Text wrapping is modeled at the TerraUI level and measured through a pluggable compile-time `text_backend` service. The default backend is approximate; the SDL demo installs an SDL_ttf-backed text backend, and the runtime frame carries an explicit `text_backend_state` pointer so measurement can use owned backend/session state instead of global caches.
 
 ## Repository layout
 
@@ -165,18 +165,20 @@ make check
 make check FILE=/tmp/terraui.asdl
 ```
 
-You can also compile with a custom text measurer:
+You can also compile with a custom text backend:
 
 ```lua
 local kernel = terraui.compile(decl, {
-    text_measurer = my_text_measurer,
+    text_backend = my_text_backend,
 })
 ```
 
-A text measurer is a Lua table with:
+A text backend is a Lua table with:
 - `key`
 - `measure_width(ctx, text_spec)`
 - `measure_height_for_width(ctx, text_spec, max_width_q)`
+
+If the backend needs runtime-owned resources, generated kernels can access them through `frame.text_backend_state`.
 
 You can still invoke the Terra tools directly if you prefer:
 

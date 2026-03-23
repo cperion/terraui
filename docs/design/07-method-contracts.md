@@ -711,7 +711,7 @@ Generate the intrinsic max-content width measurement logic for one text leaf.
 
 ### Current implementation note
 
-The current implementation delegates width measurement through `CompileCtx.text_measurer`. The bundled default measurer still uses a placeholder average-advance metric, but the compiler core no longer hardcodes that policy.
+The current implementation delegates width measurement through `CompileCtx.text_backend`. The bundled default backend still uses a placeholder average-advance metric, but the compiler core no longer hardcodes that policy.
 
 ## 6.11 `Plan.TextSpec:compile_measure_height_for_width(CompileCtx, TerraQuote max_width) -> TerraQuote`
 
@@ -728,7 +728,7 @@ Generate height-for-width measurement logic for one text leaf under a concrete w
 
 ### Current implementation note
 
-The current implementation delegates height-for-width measurement through `CompileCtx.text_measurer`. The bundled default measurer still uses a simple approximation, while the SDL demo now installs an SDL_ttf-backed measurer so layout and replay share the same text backend there.
+The current implementation delegates height-for-width measurement through `CompileCtx.text_backend`. The bundled default backend still uses a simple approximation, while the SDL demo now installs an SDL_ttf-backed text backend backed by an owned runtime session so layout and replay share the same backend state there.
 
 ## 6.12 `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
 

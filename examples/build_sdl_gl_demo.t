@@ -609,10 +609,18 @@ struct MeasureFontEntry {
     font: &C.TTF_Font
 }
 
+struct TextBackendSession {
+    render_font: &C.TTF_Font
+    measure_font_cache_cursor: int32
+    measure_font_cache: MeasureFontEntry[MEASURE_FONT_CACHE_CAP]
+    text_cache_cursor: int32
+    text_cache: TextCacheEntry[TEXT_CACHE_CAP]
+}
+
 struct DemoApp {
     window: &C.SDL_Window
     glctx: C.SDL_GLContext
-    font: &C.TTF_Font
+    text_backend: TextBackendSession
     checker_tex: uint32
     terrain_tex: uint32
     water_tex: uint32
@@ -644,12 +652,7 @@ struct DemoApp {
     progress_b: float
     accent: compile.Color
     tick: int32
-    text_cache_cursor: int32
-    text_cache: TextCacheEntry[TEXT_CACHE_CAP]
 }
-
-local measure_font_cache = terralib.global(MeasureFontEntry[MEASURE_FONT_CACHE_CAP])
-local measure_font_cache_cursor = terralib.global(int32, 0)
 
 local SDL_WINDOW_OPENGL = 0x0000000000000002ULL
 local SDL_WINDOW_HIDDEN = 0x0000000000000008ULL
@@ -663,53 +666,53 @@ local SDL_EVENT_MOUSE_BUTTON_UP = 0x402
 local SDL_EVENT_MOUSE_WHEEL = 0x403
 local SDL_BUTTON_LEFT = 1
 
-terra fetch_measure_font(font_size: float) : &C.TTF_Font
+terra fetch_measure_font(session: &TextBackendSession, font_size: float) : &C.TTF_Font
     var size10 = [int32](font_size * 10.0f)
     for i = 0, MEASURE_FONT_CACHE_CAP do
-        if measure_font_cache[i].used and measure_font_cache[i].size10 == size10 then
-            return measure_font_cache[i].font
+        if session.measure_font_cache[i].used and session.measure_font_cache[i].size10 == size10 then
+            return session.measure_font_cache[i].font
         end
     end
 
     var slot: int32 = -1
     for i = 0, MEASURE_FONT_CACHE_CAP do
-        if not measure_font_cache[i].used then
+        if not session.measure_font_cache[i].used then
             slot = i
             break
         end
     end
     if slot < 0 then
-        slot = measure_font_cache_cursor % MEASURE_FONT_CACHE_CAP
-        if measure_font_cache[slot].used and measure_font_cache[slot].font ~= nil then
-            C.TTF_CloseFont(measure_font_cache[slot].font)
+        slot = session.measure_font_cache_cursor % MEASURE_FONT_CACHE_CAP
+        if session.measure_font_cache[slot].used and session.measure_font_cache[slot].font ~= nil then
+            C.TTF_CloseFont(session.measure_font_cache[slot].font)
         end
     end
 
     var font = C.TTF_OpenFont([font_path], font_size)
     if font == nil then return nil end
 
-    measure_font_cache[slot].used = true
-    measure_font_cache[slot].size10 = size10
-    measure_font_cache[slot].font = font
-    measure_font_cache_cursor = (slot + 1) % MEASURE_FONT_CACHE_CAP
+    session.measure_font_cache[slot].used = true
+    session.measure_font_cache[slot].size10 = size10
+    session.measure_font_cache[slot].font = font
+    session.measure_font_cache_cursor = (slot + 1) % MEASURE_FONT_CACHE_CAP
     return font
 end
 
-terra clear_measure_font_cache()
+terra clear_measure_font_cache(session: &TextBackendSession)
     for i = 0, MEASURE_FONT_CACHE_CAP do
-        if measure_font_cache[i].used and measure_font_cache[i].font ~= nil then
-            C.TTF_CloseFont(measure_font_cache[i].font)
-            measure_font_cache[i].font = nil
+        if session.measure_font_cache[i].used and session.measure_font_cache[i].font ~= nil then
+            C.TTF_CloseFont(session.measure_font_cache[i].font)
+            session.measure_font_cache[i].font = nil
         end
-        measure_font_cache[i].used = false
-        measure_font_cache[i].size10 = 0
+        session.measure_font_cache[i].used = false
+        session.measure_font_cache[i].size10 = 0
     end
-    measure_font_cache_cursor = 0
+    session.measure_font_cache_cursor = 0
 end
 
-terra measure_demo_text_width(text: rawstring, font_size: float, align: int32) : float
-    if text == nil then return 0 end
-    var font = fetch_measure_font(font_size)
+terra measure_demo_text_width(session: &TextBackendSession, text: rawstring, font_size: float, align: int32) : float
+    if session == nil or text == nil then return 0 end
+    var font = fetch_measure_font(session, font_size)
     if font == nil then return 0 end
 
     if align == compile.TEXT_ALIGN_CENTER then
@@ -727,9 +730,9 @@ terra measure_demo_text_width(text: rawstring, font_size: float, align: int32) :
     return [float](w)
 end
 
-terra measure_demo_text_height_for_width(text: rawstring, font_size: float, wrap: int32, align: int32, max_width: float) : float
-    if text == nil then return 0 end
-    var font = fetch_measure_font(font_size)
+terra measure_demo_text_height_for_width(session: &TextBackendSession, text: rawstring, font_size: float, wrap: int32, align: int32, max_width: float) : float
+    if session == nil or text == nil then return 0 end
+    var font = fetch_measure_font(session, font_size)
     if font == nil then return 0 end
 
     if align == compile.TEXT_ALIGN_CENTER then
@@ -757,17 +760,18 @@ terra measure_demo_text_height_for_width(text: rawstring, font_size: float, wrap
     return [float](h)
 end
 
-local demo_text_measurer = { key = "sdl-ttf:" .. font_path }
-function demo_text_measurer:measure_width(ctx, spec)
+local demo_text_backend = { key = "sdl-ttf:" .. font_path }
+function demo_text_backend:measure_width(ctx, spec)
     local align = compile.TEXT_ALIGN_LEFT
     if spec.align == terraui.types.Decl.TextAlignCenter then
         align = compile.TEXT_ALIGN_CENTER
     elseif spec.align == terraui.types.Decl.TextAlignRight then
         align = compile.TEXT_ALIGN_RIGHT
     end
-    return `measure_demo_text_width([spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [align])
+    local session_q = `[&TextBackendSession]([ctx.frame_sym].text_backend_state)
+    return `measure_demo_text_width([session_q], [spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [align])
 end
-function demo_text_measurer:measure_height_for_width(ctx, spec, max_width)
+function demo_text_backend:measure_height_for_width(ctx, spec, max_width)
     local wrap = compile.TEXT_WRAP_NONE
     if spec.wrap == terraui.types.Decl.WrapWords then
         wrap = compile.TEXT_WRAP_WORDS
@@ -782,12 +786,13 @@ function demo_text_measurer:measure_height_for_width(ctx, spec, max_width)
         align = compile.TEXT_ALIGN_RIGHT
     end
 
-    return `measure_demo_text_height_for_width([spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [wrap], [align], [max_width])
+    local session_q = `[&TextBackendSession]([ctx.frame_sym].text_backend_state)
+    return `measure_demo_text_height_for_width([session_q], [spec.content:compile_string(ctx)], [spec.font_size:compile_number(ctx)], [wrap], [align], [max_width])
 end
 
-local bound = bind.bind_component(decl)
+local bound = bind.bind_component(decl, { text_backend = demo_text_backend })
 local planned = plan.plan_component(bound)
-local kernel = compile.compile_component(planned, { text_measurer = demo_text_measurer })
+local kernel = compile.compile_component(planned, { text_backend = demo_text_backend })
 local Frame = kernel:frame_type()
 local init_q = kernel.kernels.init_fn
 local run_q = kernel.kernels.run_fn
@@ -991,59 +996,59 @@ terra build_text_key(cmd: compile.TextCmd, out: &int8)
         to_byte(cmd.color.a))
 end
 
-terra find_text_cache(app: &DemoApp, key: &int8) : int32
+terra find_text_cache(session: &TextBackendSession, key: &int8) : int32
     for i = 0, TEXT_CACHE_CAP do
-        if app.text_cache[i].used and C.strcmp([&int8](&app.text_cache[i].key[0]), key) == 0 then
+        if session.text_cache[i].used and C.strcmp([&int8](&session.text_cache[i].key[0]), key) == 0 then
             return i
         end
     end
     return -1
 end
 
-terra store_text_cache(app: &DemoApp, key: &int8, tex: uint32, w: int32, h: int32) : int32
+terra store_text_cache(session: &TextBackendSession, key: &int8, tex: uint32, w: int32, h: int32) : int32
     var slot: int32 = -1
     for i = 0, TEXT_CACHE_CAP do
-        if not app.text_cache[i].used then
+        if not session.text_cache[i].used then
             slot = i
             break
         end
     end
     if slot < 0 then
-        slot = app.text_cache_cursor % TEXT_CACHE_CAP
-        if app.text_cache[slot].used and app.text_cache[slot].tex ~= 0 then
-            C.glDeleteTextures(1, &app.text_cache[slot].tex)
+        slot = session.text_cache_cursor % TEXT_CACHE_CAP
+        if session.text_cache[slot].used and session.text_cache[slot].tex ~= 0 then
+            C.glDeleteTextures(1, &session.text_cache[slot].tex)
         end
     end
-    app.text_cache_cursor = (slot + 1) % TEXT_CACHE_CAP
-    app.text_cache[slot].used = true
-    app.text_cache[slot].tex = tex
-    app.text_cache[slot].w = w
-    app.text_cache[slot].h = h
-    C.snprintf([&int8](&app.text_cache[slot].key[0]), TEXT_KEY_CAP, "%s", key)
+    session.text_cache_cursor = (slot + 1) % TEXT_CACHE_CAP
+    session.text_cache[slot].used = true
+    session.text_cache[slot].tex = tex
+    session.text_cache[slot].w = w
+    session.text_cache[slot].h = h
+    C.snprintf([&int8](&session.text_cache[slot].key[0]), TEXT_KEY_CAP, "%s", key)
     return slot
 end
 
-terra fetch_text_texture(app: &DemoApp, cmd: compile.TextCmd, out_w: &int32, out_h: &int32) : uint32
-    if app.font == nil or cmd.text == nil then return 0 end
+terra fetch_text_texture(session: &TextBackendSession, cmd: compile.TextCmd, out_w: &int32, out_h: &int32) : uint32
+    if session == nil or session.render_font == nil or cmd.text == nil then return 0 end
 
     var key: int8[TEXT_KEY_CAP]
     build_text_key(cmd, [&int8](&key[0]))
 
-    var cached = find_text_cache(app, [&int8](&key[0]))
+    var cached = find_text_cache(session, [&int8](&key[0]))
     if cached >= 0 then
-        @out_w = app.text_cache[cached].w
-        @out_h = app.text_cache[cached].h
-        return app.text_cache[cached].tex
+        @out_w = session.text_cache[cached].w
+        @out_h = session.text_cache[cached].h
+        return session.text_cache[cached].tex
     end
 
-    if not C.TTF_SetFontSize(app.font, cmd.font_size) then return 0 end
+    if not C.TTF_SetFontSize(session.render_font, cmd.font_size) then return 0 end
 
     if cmd.align == compile.TEXT_ALIGN_CENTER then
-        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_CENTER)
+        C.TTF_SetFontWrapAlignment(session.render_font, C.TTF_HORIZONTAL_ALIGN_CENTER)
     elseif cmd.align == compile.TEXT_ALIGN_RIGHT then
-        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_RIGHT)
+        C.TTF_SetFontWrapAlignment(session.render_font, C.TTF_HORIZONTAL_ALIGN_RIGHT)
     else
-        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_LEFT)
+        C.TTF_SetFontWrapAlignment(session.render_font, C.TTF_HORIZONTAL_ALIGN_LEFT)
     end
 
     var col: C.SDL_Color
@@ -1056,11 +1061,11 @@ terra fetch_text_texture(app: &DemoApp, cmd: compile.TextCmd, out_w: &int32, out
     var wrap_w = [int32](cmd.w)
     if wrap_w < 1 then wrap_w = 1 end
     if cmd.wrap == compile.TEXT_WRAP_WORDS then
-        surf = C.TTF_RenderText_Blended_Wrapped(app.font, cmd.text, C.strlen(cmd.text), col, wrap_w)
+        surf = C.TTF_RenderText_Blended_Wrapped(session.render_font, cmd.text, C.strlen(cmd.text), col, wrap_w)
     elseif cmd.wrap == compile.TEXT_WRAP_NEWLINES then
-        surf = C.TTF_RenderText_Blended_Wrapped(app.font, cmd.text, C.strlen(cmd.text), col, 1000000)
+        surf = C.TTF_RenderText_Blended_Wrapped(session.render_font, cmd.text, C.strlen(cmd.text), col, 1000000)
     else
-        surf = C.TTF_RenderText_Blended(app.font, cmd.text, C.strlen(cmd.text), col)
+        surf = C.TTF_RenderText_Blended(session.render_font, cmd.text, C.strlen(cmd.text), col)
     end
 
     if surf == nil then return 0 end
@@ -1074,7 +1079,7 @@ terra fetch_text_texture(app: &DemoApp, cmd: compile.TextCmd, out_w: &int32, out
 
     @out_w = rgba_surf.w
     @out_h = rgba_surf.h
-    store_text_cache(app, [&int8](&key[0]), tex, rgba_surf.w, rgba_surf.h)
+    store_text_cache(session, [&int8](&key[0]), tex, rgba_surf.w, rgba_surf.h)
     C.SDL_DestroySurface(rgba_surf)
     return tex
 end
@@ -1082,7 +1087,7 @@ end
 terra draw_text(app: &DemoApp, cmd: compile.TextCmd)
     var w: int32 = 0
     var h: int32 = 0
-    var tex = fetch_text_texture(app, cmd, &w, &h)
+    var tex = fetch_text_texture(&app.text_backend, cmd, &w, &h)
     if tex == 0 then return end
 
     var draw_x = cmd.x
@@ -1406,7 +1411,7 @@ terra apply_asset_profile(app: &DemoApp, asset_name: rawstring)
 end
 
 terra app_init(app: &DemoApp, hidden: bool) : int
-    clear_measure_font_cache()
+    clear_measure_font_cache(&app.text_backend)
     if not C.SDL_Init(C.SDL_INIT_VIDEO) then return 1 end
     if not C.TTF_Init() then
         C.SDL_Quit()
@@ -1434,8 +1439,8 @@ terra app_init(app: &DemoApp, hidden: bool) : int
     end
 
     C.SDL_GL_SetSwapInterval(1)
-    app.font = C.TTF_OpenFont([font_path], 16.0)
-    if app.font == nil then
+    app.text_backend.render_font = C.TTF_OpenFont([font_path], 16.0)
+    if app.text_backend.render_font == nil then
         C.SDL_GL_DestroyContext(app.glctx)
         C.SDL_DestroyWindow(app.window)
         C.TTF_Quit()
@@ -1451,7 +1456,7 @@ terra app_init(app: &DemoApp, hidden: bool) : int
     app.status_primary = "Ready"
     app.footer_text = "Cursor idle"
     app.tick = 0
-    app.text_cache_cursor = 0
+    app.text_backend.text_cache_cursor = 0
     apply_tool_profile(app, "Inspect")
     apply_asset_profile(app, "Terrain")
     set_events(app,
@@ -1469,12 +1474,12 @@ terra app_shutdown(app: &DemoApp)
     if app.blueprint_tex ~= 0 then C.glDeleteTextures(1, &app.blueprint_tex) end
     if app.heatmap_tex ~= 0 then C.glDeleteTextures(1, &app.heatmap_tex) end
     for i = 0, TEXT_CACHE_CAP do
-        if app.text_cache[i].used and app.text_cache[i].tex ~= 0 then
-            C.glDeleteTextures(1, &app.text_cache[i].tex)
+        if app.text_backend.text_cache[i].used and app.text_backend.text_cache[i].tex ~= 0 then
+            C.glDeleteTextures(1, &app.text_backend.text_cache[i].tex)
         end
     end
-    clear_measure_font_cache()
-    if app.font ~= nil then C.TTF_CloseFont(app.font) end
+    clear_measure_font_cache(&app.text_backend)
+    if app.text_backend.render_font ~= nil then C.TTF_CloseFont(app.text_backend.render_font) end
     if app.glctx ~= nil then C.SDL_GL_DestroyContext(app.glctx) end
     if app.window ~= nil then C.SDL_DestroyWindow(app.window) end
     C.TTF_Quit()
@@ -1524,6 +1529,7 @@ terra pump_input(app: &DemoApp, frame: &Frame, quit: &bool)
 end
 
 terra sync_params(frame: &Frame, app: &DemoApp)
+    frame.text_backend_state = [&opaque](&app.text_backend)
     -- param order matches `params` declaration above.
     frame.params.p0 = app.selected_tool
     frame.params.p1 = app.selected_asset

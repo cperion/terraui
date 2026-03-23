@@ -16,6 +16,16 @@ local Bound = TerraUI.types.Bound
 local BindCtx = {}
 BindCtx.__index = BindCtx
 
+local function text_backend_key(opts)
+    local tb = opts and opts.text_backend
+    if type(tb) == "table" and tb.key ~= nil then
+        return tostring(tb.key)
+    elseif tb ~= nil then
+        return tostring(tb)
+    end
+    return "default"
+end
+
 function BindCtx.new(opts)
     opts = opts or {}
     return setmetatable({
@@ -34,7 +44,7 @@ function BindCtx.new(opts)
         _widget_frames     = {},
         _override_ids      = {},
         _renderer          = opts.renderer or "default",
-        _text_backend      = opts.text_backend or "default",
+        _text_backend      = text_backend_key(opts),
     }, BindCtx)
 end
 

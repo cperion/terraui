@@ -285,18 +285,18 @@ do
         },
     }
 
-    local custom_measurer = { key = "dsl-test-measurer" }
-    function custom_measurer:measure_width(ctx, spec)
+    local custom_text_backend = { key = "dsl-test-backend" }
+    function custom_text_backend:measure_width(ctx, spec)
         return `42.0f
     end
-    function custom_measurer:measure_height_for_width(ctx, spec, max_width)
+    function custom_text_backend:measure_height_for_width(ctx, spec, max_width)
         return `17.0f
     end
 
     local k1 = terraui.compile(decl)
     local k2 = terraui.compile(decl)
-    local k3 = terraui.compile(decl, { text_measurer = custom_measurer })
-    local k4 = terraui.compile(decl, { text_measurer = custom_measurer })
+    local k3 = terraui.compile(decl, { text_backend = custom_text_backend })
+    local k4 = terraui.compile(decl, { text_backend = custom_text_backend })
 
     assert(k1 == k2)
     assert(k3 == k4)
