@@ -54,26 +54,26 @@ local function make_node(name, axis, w, h, pad, gap, children)
         children or List())
 end
 
-local function text_style(font_size)
+local function text_style(font_size, wrap)
     return Decl.TextStyle(
         Decl.ColorLit(1, 1, 1, 1),
         Decl.StringLit("default"),
         Decl.NumLit(font_size or 20),
         Decl.NumLit(0),
         Decl.NumLit(1.2),
-        Decl.WrapNone,
+        wrap or Decl.WrapNone,
         Decl.TextAlignLeft)
 end
 
-local function make_label(name, text, font_size)
+local function make_label(name, text, font_size, wrap, width)
     return node(
         Decl.Stable(name), no_vis(),
         Decl.Layout(Decl.Row,
-            Decl.Fit(nil, nil), Decl.Fit(nil, nil),
+            width or Decl.Fit(nil, nil), Decl.Fit(nil, nil),
             zero_padding(), zero,
             Decl.AlignLeft, Decl.AlignTop),
         no_decor(), nil, nil, no_input(), nil,
-        Decl.Text(Decl.TextLeaf(Decl.StringLit(text), text_style(font_size))),
+        Decl.Text(Decl.TextLeaf(Decl.StringLit(text), text_style(font_size, wrap))),
         List())
 end
 
@@ -541,7 +541,47 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 13: container fit sizing aggregates child intrinsic sizes
+-- Test 13: wrapped text height is remeasured from resolved width
+---------------------------------------------------------------------------
+
+do
+    local k = full_pipeline(component(
+        "wrapped_text_fit", List(), List(),
+        make_node("root", Decl.Column,
+            Decl.Grow(nil, nil), Decl.Grow(nil, nil),
+            nil, nil,
+            List{
+                node(
+                    Decl.Stable("panel"), no_vis(),
+                    Decl.Layout(Decl.Column,
+                        Decl.Fixed(Decl.NumLit(30)), Decl.Fit(nil, nil),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    no_decor(), nil, nil, no_input(), nil, nil,
+                    List{
+                        make_label("lbl", "AAAA BBBB", 10, Decl.WrapWords, Decl.Grow(nil, nil)),
+                    }),
+            })))
+
+    local Frame = k:frame_type()
+    local layout_q = k.kernels.layout_fn
+
+    local test = terra()
+        var f : Frame
+        f.viewport_w = 800; f.viewport_h = 600
+        [layout_q](&f)
+        if f.nodes[2].w ~= 30 then return 1 end
+        if f.nodes[2].h ~= 24 then return 2 end
+        if f.nodes[1].h ~= 24 then return 3 end
+        return 0
+    end
+
+    assert(test() == 0, "test 13 failed at " .. tostring(test()))
+    print("  test 13 (wrapped text height remeasure): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 14: container fit sizing aggregates child intrinsic sizes
 ---------------------------------------------------------------------------
 
 do
@@ -581,8 +621,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 13 failed at " .. tostring(test()))
-    print("  test 13 (container fit aggregation): ok")
+    assert(test() == 0, "test 14 failed at " .. tostring(test()))
+    print("  test 14 (container fit aggregation): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -616,8 +656,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 14 failed at " .. tostring(test()))
-    print("  test 14 (row center alignment): ok")
+    assert(test() == 0, "test 15 failed at " .. tostring(test()))
+    print("  test 15 (row center alignment): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -657,8 +697,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 15 failed at " .. tostring(test()))
-    print("  test 15 (aspect ratio): ok")
+    assert(test() == 0, "test 16 failed at " .. tostring(test()))
+    print("  test 16 (aspect ratio): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -700,8 +740,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 16 failed at " .. tostring(test()))
-    print("  test 16 (clip child offsets): ok")
+    assert(test() == 0, "test 17 failed at " .. tostring(test()))
+    print("  test 17 (clip child offsets): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -755,8 +795,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 17 failed at " .. tostring(test()))
-    print("  test 17 (floating placement): ok")
+    assert(test() == 0, "test 18 failed at " .. tostring(test()))
+    print("  test 18 (floating placement): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -815,8 +855,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 18 failed at " .. tostring(test()))
-    print("  test 18 (hit testing): ok")
+    assert(test() == 0, "test 19 failed at " .. tostring(test()))
+    print("  test 19 (hit testing): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -873,8 +913,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 19 failed at " .. tostring(test()))
-    print("  test 19 (input transitions): ok")
+    assert(test() == 0, "test 20 failed at " .. tostring(test()))
+    print("  test 20 (input transitions): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -918,8 +958,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 20 failed at " .. tostring(test()))
-    print("  test 20 (rect/border emission): ok")
+    assert(test() == 0, "test 21 failed at " .. tostring(test()))
+    print("  test 21 (rect/border emission): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -984,8 +1024,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 21 failed at " .. tostring(test()))
-    print("  test 21 (text/image/custom/scissor emission): ok")
+    assert(test() == 0, "test 22 failed at " .. tostring(test()))
+    print("  test 22 (text/image/custom/scissor emission): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -1036,8 +1076,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 22 failed at " .. tostring(test()))
-    print("  test 22 (invisible guard): ok")
+    assert(test() == 0, "test 23 failed at " .. tostring(test()))
+    print("  test 23 (invisible guard): ok")
 end
 
 ---------------------------------------------------------------------------
@@ -1088,8 +1128,8 @@ do
         return 0
     end
 
-    assert(test() == 0, "test 23 failed at " .. tostring(test()))
-    print("  test 23 (disabled guard): ok")
+    assert(test() == 0, "test 24 failed at " .. tostring(test()))
+    print("  test 24 (disabled guard): ok")
 end
 
 ---------------------------------------------------------------------------

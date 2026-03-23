@@ -519,6 +519,7 @@ Provide Terra-visible text measurement support during code generation.
 ### Required behavior
 - reflect the active text backend contract
 - support width/height measurement needs of layout
+- support height-for-width measurement via `max_width_q`
 - respect wrap/alignment/font settings
 
 ### Must guarantee

@@ -428,6 +428,10 @@ Leaf constructors consume one props record and return one `Decl.Node`.
 - wrap = `ui.wrap.none`
 - text_align = `ui.text_align.left`
 
+### Wrap note
+- `ui.wrap.words` only changes layout once the label has a concrete width to wrap against
+- in practice that means wrapped labels should usually use a constrained width such as `grow()`, `fixed(...)`, or `percent(...)`, rather than the default `fit()`
+
 ## 6.2 `ui.button { props }`
 
 ### Required props

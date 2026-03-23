@@ -143,6 +143,8 @@ do
         elseif p.kind == "text" then
             saw_text = true
             assert(p.cmd.text == "Hello")
+            assert(p.cmd.wrap ~= nil)
+            assert(p.cmd.align ~= nil)
         elseif p.kind == "image" then
             saw_image = true
             assert(p.cmd.image_id == "tex")

@@ -82,10 +82,130 @@ struct TextCmd {
     font_size: float
     letter_spacing: float
     line_height: float
+    wrap: int32
+    align: int32
     color: Color
     z: float
     seq: uint32
 }
+
+local TEXT_WRAP_NONE = 0
+local TEXT_WRAP_WORDS = 1
+local TEXT_WRAP_NEWLINES = 2
+
+local TEXT_ALIGN_LEFT = 0
+local TEXT_ALIGN_CENTER = 1
+local TEXT_ALIGN_RIGHT = 2
+
+terra approx_text_line_width(chars: int32, font_size: float, letter_spacing: float) : float
+    if chars <= 0 then return 0.0f end
+    var width = [float](chars) * font_size * 0.6f
+    if chars > 1 then
+        width = width + [float](chars - 1) * letter_spacing
+    end
+    return width
+end
+
+terra approx_text_max_explicit_line_width(text: rawstring, font_size: float, letter_spacing: float) : float
+    if text == nil then return 0.0f end
+
+    var max_chars: int32 = 0
+    var cur_chars: int32 = 0
+    var i: int32 = 0
+    while text[i] ~= 0 do
+        if text[i] == 10 then
+            if cur_chars > max_chars then max_chars = cur_chars end
+            cur_chars = 0
+        else
+            cur_chars = cur_chars + 1
+        end
+        i = i + 1
+    end
+    if cur_chars > max_chars then max_chars = cur_chars end
+    return approx_text_line_width(max_chars, font_size, letter_spacing)
+end
+
+terra approx_text_explicit_line_count(text: rawstring) : int32
+    if text == nil then return 1 end
+
+    var lines: int32 = 1
+    var i: int32 = 0
+    while text[i] ~= 0 do
+        if text[i] == 10 then
+            lines = lines + 1
+        end
+        i = i + 1
+    end
+    return lines
+end
+
+terra approx_text_chars_per_line(max_width: float, font_size: float, letter_spacing: float) : int32
+    var adv = font_size * 0.6f + letter_spacing
+    if adv <= 0.0f then return 1 end
+
+    var limit = [int32](max_width / adv)
+    if limit < 1 then limit = 1 end
+    return limit
+end
+
+terra place_wrapped_word(line_chars: int32, word_chars: int32, pending_space: int32, limit: int32, lines: &int32) : int32
+    if word_chars <= 0 then return line_chars end
+
+    var cur = line_chars
+    var need = word_chars
+    if cur > 0 then need = need + pending_space end
+
+    if cur > 0 and cur + need <= limit then
+        return cur + need
+    end
+
+    if cur > 0 then
+        @lines = @lines + 1
+        cur = 0
+    end
+
+    while word_chars > limit do
+        cur = limit
+        word_chars = word_chars - limit
+        if word_chars > 0 then
+            @lines = @lines + 1
+            cur = 0
+        end
+    end
+
+    return cur + word_chars
+end
+
+terra approx_text_wrapped_line_count(text: rawstring, max_width: float, font_size: float, letter_spacing: float) : int32
+    if text == nil then return 1 end
+
+    var limit = approx_text_chars_per_line(max_width, font_size, letter_spacing)
+    var lines: int32 = 1
+    var line_chars: int32 = 0
+    var word_chars: int32 = 0
+    var pending_space: int32 = 0
+    var i: int32 = 0
+
+    while text[i] ~= 0 do
+        if text[i] == 10 then
+            line_chars = place_wrapped_word(line_chars, word_chars, pending_space, limit, &lines)
+            word_chars = 0
+            pending_space = 0
+            lines = lines + 1
+            line_chars = 0
+        elseif text[i] == 32 or text[i] == 9 or text[i] == 13 then
+            line_chars = place_wrapped_word(line_chars, word_chars, pending_space, limit, &lines)
+            word_chars = 0
+            pending_space = pending_space + 1
+        else
+            word_chars = word_chars + 1
+        end
+        i = i + 1
+    end
+
+    line_chars = place_wrapped_word(line_chars, word_chars, pending_space, limit, &lines)
+    return lines
+end
 
 struct ImageCmd {
     x: float; y: float; w: float; h: float
@@ -118,6 +238,18 @@ local function vtype_to_terra(vt)
     elseif vt == Decl.TVec2   then return Vec2
     elseif vt == Decl.TAny    then return &opaque
     else error("unknown ValueType") end
+end
+
+local function wrap_mode_code(mode)
+    if mode == Decl.WrapWords then return TEXT_WRAP_WORDS end
+    if mode == Decl.WrapNewlines then return TEXT_WRAP_NEWLINES end
+    return TEXT_WRAP_NONE
+end
+
+local function text_align_code(align)
+    if align == Decl.TextAlignCenter then return TEXT_ALIGN_CENTER end
+    if align == Decl.TextAlignRight then return TEXT_ALIGN_RIGHT end
+    return TEXT_ALIGN_LEFT
 end
 
 ---------------------------------------------------------------------------
@@ -479,8 +611,8 @@ function CompileCtx:emit_node_measure(node)
 
     if node.text_slot then
         local ts = self.plan.texts[node.text_slot + 1]
-        leaf_w = ts:compile_measure(self, Plan.MeasureWidth)
-        leaf_h = ts:compile_measure(self, Plan.MeasureHeight)
+        leaf_w = ts:compile_measure_width(self)
+        leaf_h = ts:compile_measure_height_for_width(self, leaf_w)
     end
 
     local children = self:flow_children(node)
@@ -529,6 +661,59 @@ function CompileCtx:emit_node_measure(node)
             [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
         else
             [frame].nodes[i].want_w = 0.0f
+            [frame].nodes[i].want_h = 0.0f
+        end
+    end)
+
+    return quote [stmts] end
+end
+
+function CompileCtx:emit_node_wrap_measure(node)
+    local frame = self.frame_sym
+    local i = node.index
+    local pad_t = node.padding_top:compile_number(self)
+    local pad_b = node.padding_bottom:compile_number(self)
+    local gap_v = node.gap:compile_number(self)
+
+    local leaf_h = `0.0f
+    if node.text_slot then
+        local ts = self.plan.texts[node.text_slot + 1]
+        leaf_h = ts:compile_measure_height_for_width(self, `[frame].nodes[i].content_w)
+    end
+
+    local children = self:flow_children(node)
+    local child_h = symbol(float, "wrap_want_child_h" .. i)
+    local stmts = terralib.newlist()
+    stmts:insert(quote var [child_h] = 0.0f end)
+
+    local child_count = #children
+    if child_count > 0 then
+        if node.axis == Decl.Row then
+            for _, child in ipairs(children) do
+                local ci = child.index
+                stmts:insert(quote
+                    [child_h] = terralib.select([child_h] > [frame].nodes[ci].want_h,
+                                                [child_h],
+                                                [frame].nodes[ci].want_h)
+                end)
+            end
+        else
+            if child_count > 1 then
+                stmts:insert(quote [child_h] = [gap_v] * [float](child_count - 1) end)
+            end
+            for _, child in ipairs(children) do
+                local ci = child.index
+                stmts:insert(quote
+                    [child_h] = [child_h] + [frame].nodes[ci].want_h
+                end)
+            end
+        end
+    end
+
+    stmts:insert(quote
+        if [frame].nodes[i].visible then
+            [frame].nodes[i].want_h = terralib.select([leaf_h] > [child_h], [leaf_h], [child_h]) + [pad_t] + [pad_b]
+        else
             [frame].nodes[i].want_h = 0.0f
         end
     end)
@@ -1003,16 +1188,29 @@ function Plan.ClipSpec:compile_emit_end(ctx)
     end
 end
 
-function Plan.TextSpec:compile_measure(ctx, mode)
+function Plan.TextSpec:compile_measure_width(ctx)
     local content = self.content:compile_string(ctx)
     local font_size = self.font_size:compile_number(ctx)
+    local letter_spacing = self.letter_spacing:compile_number(ctx)
+    return `approx_text_max_explicit_line_width([content], [font_size], [letter_spacing])
+end
+
+function Plan.TextSpec:compile_measure_height_for_width(ctx, max_width)
+    local content = self.content:compile_string(ctx)
+    local font_size = self.font_size:compile_number(ctx)
+    local letter_spacing = self.letter_spacing:compile_number(ctx)
     local line_height = self.line_height:compile_number(ctx)
 
-    if mode == Plan.MeasureWidth then
-        return `[float](C.strlen([content])) * [font_size] * 0.6f
+    local line_count
+    if self.wrap == Decl.WrapWords then
+        line_count = `approx_text_wrapped_line_count([content], [max_width], [font_size], [letter_spacing])
+    elseif self.wrap == Decl.WrapNewlines then
+        line_count = `approx_text_explicit_line_count([content])
     else
-        return `[font_size] * [line_height]
+        line_count = `1
     end
+
+    return `[float]([line_count]) * [font_size] * [line_height]
 end
 
 function Plan.TextSpec:compile_emit(ctx)
@@ -1024,19 +1222,23 @@ function Plan.TextSpec:compile_emit(ctx)
     local letter_spacing = self.letter_spacing:compile_number(ctx)
     local line_height = self.line_height:compile_number(ctx)
     local color = self.color:compile_color(ctx)
+    local wrap = wrap_mode_code(self.wrap)
+    local align = text_align_code(self.align)
 
     return quote
         if [frame].nodes[self.node_index].visible then
             var idx = [frame].text_count
-            [frame].texts[idx].x = [frame].nodes[self.node_index].x
-            [frame].texts[idx].y = [frame].nodes[self.node_index].y
-            [frame].texts[idx].w = [frame].nodes[self.node_index].w
-            [frame].texts[idx].h = [frame].nodes[self.node_index].h
+            [frame].texts[idx].x = [frame].nodes[self.node_index].content_x
+            [frame].texts[idx].y = [frame].nodes[self.node_index].content_y
+            [frame].texts[idx].w = [frame].nodes[self.node_index].content_w
+            [frame].texts[idx].h = [frame].nodes[self.node_index].content_h
             [frame].texts[idx].text = [text]
             [frame].texts[idx].font_id = [font_id]
             [frame].texts[idx].font_size = [font_size]
             [frame].texts[idx].letter_spacing = [letter_spacing]
             [frame].texts[idx].line_height = [line_height]
+            [frame].texts[idx].wrap = wrap
+            [frame].texts[idx].align = align
             [frame].texts[idx].color = [color]
             [frame].texts[idx].z = [z]
             [frame].texts[idx].seq = [frame].draw_seq
@@ -1155,6 +1357,40 @@ function CompileCtx:compile_layout_fn()
     local nodes = self.plan.nodes
     local stmts = terralib.newlist()
 
+    local function emit_layout_passes()
+        local out = terralib.newlist()
+
+        local i = 1
+        while i <= #nodes do
+            local node = nodes[i]
+            if node.float_slot then
+                i = node.subtree_end + 1
+            else
+                out:insert(node:compile_layout(self))
+                i = i + 1
+            end
+        end
+
+        for _, fs in ipairs(self.plan.floats) do
+            local root = nodes[fs.node_index + 1]
+            out:insert(fs:compile_place(self))
+            out:insert(root:compile_layout(self))
+
+            local j = root.index + 2
+            while j <= root.subtree_end do
+                local node = nodes[j]
+                if node.float_slot then
+                    j = node.subtree_end + 1
+                else
+                    out:insert(node:compile_layout(self))
+                    j = j + 1
+                end
+            end
+        end
+
+        return out
+    end
+
     stmts:insert(quote
         [frame].draw_seq = 0
         [frame].action_node = -1
@@ -1167,40 +1403,21 @@ function CompileCtx:compile_layout_fn()
         stmts:insert(self:emit_guard_eval(node))
     end
 
-    -- pass 1: intrinsic measure (postorder)
+    -- pass 1: intrinsic width + provisional height measure (postorder)
     for i = #nodes, 1, -1 do
         stmts:insert(self:emit_node_measure(nodes[i]))
     end
 
-    -- pass 2: normal-flow layout (preorder), skipping floating subtrees
-    local i = 1
-    while i <= #nodes do
-        local node = nodes[i]
-        if node.float_slot then
-            i = node.subtree_end + 1
-        else
-            stmts:insert(node:compile_layout(self))
-            i = i + 1
-        end
+    -- pass 2/3: provisional layout to establish concrete widths/content boxes
+    stmts:insertall(emit_layout_passes())
+
+    -- pass 4: width-aware text remeasure + propagated fit heights (postorder)
+    for i = #nodes, 1, -1 do
+        stmts:insert(self:emit_node_wrap_measure(nodes[i]))
     end
 
-    -- pass 3: floating placement + subtree layout
-    for _, fs in ipairs(self.plan.floats) do
-        local root = nodes[fs.node_index + 1]
-        stmts:insert(fs:compile_place(self))
-        stmts:insert(root:compile_layout(self))
-
-        local j = root.index + 2
-        while j <= root.subtree_end do
-            local node = nodes[j]
-            if node.float_slot then
-                j = node.subtree_end + 1
-            else
-                stmts:insert(node:compile_layout(self))
-                j = j + 1
-            end
-        end
-    end
+    -- pass 5/6: final layout using wrapped heights
+    stmts:insertall(emit_layout_passes())
 
     return terra([frame])
         escape
@@ -1391,6 +1608,12 @@ M.TextCmd    = TextCmd
 M.ImageCmd   = ImageCmd
 M.ScissorCmd = ScissorCmd
 M.CustomCmd  = CustomCmd
+M.TEXT_WRAP_NONE = TEXT_WRAP_NONE
+M.TEXT_WRAP_WORDS = TEXT_WRAP_WORDS
+M.TEXT_WRAP_NEWLINES = TEXT_WRAP_NEWLINES
+M.TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT
+M.TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER
+M.TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT
 
 function M.compile_component(plan_component)
     local ctx = CompileCtx.new(plan_component)

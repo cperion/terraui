@@ -202,9 +202,6 @@ module Plan {
          | Fixed(Binding value)
          | Percent(Binding value)
 
-    MeasureMode = MeasureWidth
-         | MeasureHeight
-
     Guard = (Binding? visible_when, Binding? enabled_when)
 
     Paint = (Binding? background, Border? border, CornerRadius? radius, Binding? opacity)

@@ -697,27 +697,40 @@ Emit the matching backend clip/scissor end command.
 
 Implemented via matching high-level `ScissorCmd` end packets.
 
-## 6.10 `Plan.TextSpec:compile_measure(CompileCtx, Plan.MeasureMode) -> TerraQuote`
+## 6.10 `Plan.TextSpec:compile_measure_width(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
-Generate text measurement logic for one dimension.
+Generate the intrinsic max-content width measurement logic for one text leaf.
 
 ### Required behavior
 
-- call compile-context text measurement support
-- respect wrap, align, font, spacing, and line-height settings
-- return width or height according to `MeasureMode`
+- call compile-context text measurement support or an equivalent backend-facing helper
+- respect font, spacing, explicit newline boundaries, and other style settings that affect max-content width
+- not require a parent width constraint
 
 ### Current implementation note
 
-The current implementation satisfies the structural contract but still uses a placeholder text metric:
-- width ~= `strlen(text) * font_size * 0.6`
-- height ~= `font_size * line_height`
+The current implementation uses a placeholder metric based on average character advance. It still treats text measurement as a kernel concern, but now splits width from height-for-width so wrapped text can participate in layout honestly.
 
-This is enough for kernel/layout validation, but it is not yet the final text-backend contract described elsewhere in the docs.
+## 6.11 `Plan.TextSpec:compile_measure_height_for_width(CompileCtx, TerraQuote max_width) -> TerraQuote`
 
-## 6.11 `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
+### Purpose
+
+Generate height-for-width measurement logic for one text leaf under a concrete width constraint.
+
+### Required behavior
+
+- respect wrap mode, alignment-related backend constraints, font, spacing, and line-height settings
+- treat `WrapWords` as width-dependent
+- allow explicit newline-only measurement for `WrapNewlines`
+- return a height quote usable during layout remeasurement
+
+### Current implementation note
+
+The current implementation uses a placeholder average-character metric and a simple word-wrapping approximation. That is enough to validate layout and demo behavior, but it is not yet the final text-backend contract described elsewhere in the docs.
+
+## 6.12 `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
@@ -732,7 +745,7 @@ Emit one high-level text draw command.
 
 This is implemented. The current kernel emits high-level `TextCmd` values carrying text/style/rect data. Glyph shaping is still external to the kernel.
 
-## 6.12 `Plan.ImageSpec:compile_emit(CompileCtx) -> TerraQuote`
+## 6.13 `Plan.ImageSpec:compile_emit(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
@@ -747,7 +760,7 @@ Emit one image draw command.
 
 This is implemented at the stream-emission level. Image intrinsic measurement is still minimal.
 
-## 6.13 `Plan.CustomSpec:compile_emit(CompileCtx) -> TerraQuote`
+## 6.14 `Plan.CustomSpec:compile_emit(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
@@ -762,7 +775,7 @@ Emit one custom draw command.
 
 The current kernel emits `CustomCmd` with rect + `kind`. Payload preservation at backend replay level is still minimal in v1.
 
-## 6.14 `Plan.FloatSpec:compile_place(CompileCtx) -> TerraQuote`
+## 6.15 `Plan.FloatSpec:compile_place(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
@@ -779,15 +792,15 @@ Generate floating placement logic.
 
 This is implemented for the current static-tree kernel. Floating nodes are removed from normal flow, then placed in a later layout pass against their resolved target.
 
-## 6.15 `Plan.Binding:compile_bool(CompileCtx) -> TerraQuote`
+## 6.16 `Plan.Binding:compile_bool(CompileCtx) -> TerraQuote`
 
-## 6.16 `Plan.Binding:compile_number(CompileCtx) -> TerraQuote`
+## 6.17 `Plan.Binding:compile_number(CompileCtx) -> TerraQuote`
 
-## 6.17 `Plan.Binding:compile_string(CompileCtx) -> TerraQuote`
+## 6.18 `Plan.Binding:compile_string(CompileCtx) -> TerraQuote`
 
-## 6.18 `Plan.Binding:compile_color(CompileCtx) -> TerraQuote`
+## 6.19 `Plan.Binding:compile_color(CompileCtx) -> TerraQuote`
 
-## 6.19 `Plan.Binding:compile_vec2(CompileCtx) -> TerraQuote`
+## 6.20 `Plan.Binding:compile_vec2(CompileCtx) -> TerraQuote`
 
 ### Purpose
 
@@ -855,7 +868,7 @@ If implementing these methods incrementally, start here:
 5. `Plan.Component:compile`
 6. `Plan.Node:compile_layout`
 7. `Plan.Node:compile_hit`
-8. `Plan.TextSpec:compile_measure`
+8. `Plan.TextSpec:compile_measure_width` / `Plan.TextSpec:compile_measure_height_for_width`
 9. `Plan.Paint:compile_emit`
 10. remaining emit/place helpers
 

@@ -569,11 +569,6 @@ local schema TerraUI
             Percent { value: Binding }
         end
 
-        flags MeasureMode
-            MeasureWidth
-            MeasureHeight
-        end
-
         record Guard
             visible_when: Binding?
             enabled_when: Binding?
@@ -685,7 +680,8 @@ local schema TerraUI
             ClipSpec:compile_apply(ctx: CompileCtx) -> TerraQuote
             ClipSpec:compile_emit_begin(ctx: CompileCtx) -> TerraQuote
             ClipSpec:compile_emit_end(ctx: CompileCtx) -> TerraQuote
-            TextSpec:compile_measure(ctx: CompileCtx, mode: MeasureMode) -> TerraQuote
+            TextSpec:compile_measure_width(ctx: CompileCtx) -> TerraQuote
+            TextSpec:compile_measure_height_for_width(ctx: CompileCtx, max_width: TerraQuote) -> TerraQuote
             TextSpec:compile_emit(ctx: CompileCtx) -> TerraQuote
             ImageSpec:compile_emit(ctx: CompileCtx) -> TerraQuote
             CustomSpec:compile_emit(ctx: CompileCtx) -> TerraQuote

@@ -63,6 +63,9 @@ local function label(text, props)
     props.text = text
     props.text_color = props.text_color or rgba(0.92, 0.93, 0.95, 1)
     props.font_size = props.font_size or 15
+    if props.wrap ~= nil and props.width == nil then
+        props.width = ui.grow()
+    end
     return ui.label(props)
 end
 
@@ -360,15 +363,15 @@ local Shell = ui.widget("Shell") {
 
 local assets_children = {
     label("Assets", { font_size = 21 }),
-    label("Choose a surface to drive the preview + inspector.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+    label("Choose a surface to drive the preview + inspector.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1), wrap = ui.wrap.words }),
     button("Terrain",   "asset:terrain"),
     button("Water",     "asset:water"),
     button("Roads",     "asset:roads"),
     button("Blueprint", "asset:blueprint"),
     button("Heatmap",   "asset:heatmap"),
     ui.spacer { height = ui.fixed(12), width = ui.fixed(0) },
-    label("The list is clipped and scroll-offset in the kernel.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-    label("Use the center rail and inspector widgets to compare mode-specific metadata.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+    label("The list is clipped and scroll-offset in the kernel.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1), wrap = ui.wrap.words }),
+    label("Use the center rail and inspector widgets to compare mode-specific metadata.", { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1), wrap = ui.wrap.words }),
 }
 
 local app = ui.scope("app")
@@ -404,7 +407,7 @@ local decl = ui.component("sdl_gl_demo") {
                 trailing = {
                     ui.column { gap = 2, width = ui.fit(), height = ui.fit() } {
                         label("TerraUI SDL + OpenGL demo", { font_size = 18 }),
-                        label(ui.param_ref("status_secondary"), { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1) }),
+                        label(ui.param_ref("status_secondary"), { font_size = 13, text_color = rgba(0.68, 0.72, 0.78, 1), width = ui.fixed(320), wrap = ui.wrap.words }),
                     },
                 },
             },
@@ -490,9 +493,9 @@ local decl = ui.component("sdl_gl_demo") {
                     height = ui.fit(),
                     gap = 18,
                 }) {
-                    label("Kernel: compiled layout + hit + emit", { text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                    label("Backend: SDL_ttf + OpenGL replay with text texture cache", { text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                    label(ui.param_ref("detail_a"), { text_color = ui.param_ref("accent") }),
+                    label("Kernel: compiled layout + hit + emit", { width = ui.grow(), text_color = rgba(0.68, 0.72, 0.78, 1), wrap = ui.wrap.words }),
+                    label("Backend: SDL_ttf + OpenGL replay with text texture cache", { width = ui.grow(), text_color = rgba(0.68, 0.72, 0.78, 1), wrap = ui.wrap.words }),
+                    label(ui.param_ref("detail_a"), { width = ui.grow(), text_color = ui.param_ref("accent"), wrap = ui.wrap.words }),
                 },
 
                 ui.tooltip {
@@ -508,8 +511,10 @@ local decl = ui.component("sdl_gl_demo") {
                     border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.56, 0.42, 0.10, 1) },
                 } {
                     label(ui.param_ref("hint_text"), {
+                        width = ui.fixed(260),
                         text_color = rgba(0.18, 0.14, 0.08, 1),
                         font_size = 14,
+                        wrap = ui.wrap.words,
                     }),
                 },
             },
@@ -532,15 +537,15 @@ local decl = ui.component("sdl_gl_demo") {
                 context = {
                     label("Tool context", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
                     label(ui.param_ref("mode_summary"), { font_size = 14 }),
-                    label(ui.param_ref("mode_line_1"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
-                    label(ui.param_ref("mode_line_2"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
-                    label(ui.param_ref("mode_line_3"), { font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1) }),
+                    label(ui.param_ref("mode_line_1"), { width = ui.grow(), font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1), wrap = ui.wrap.words }),
+                    label(ui.param_ref("mode_line_2"), { width = ui.grow(), font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1), wrap = ui.wrap.words }),
+                    label(ui.param_ref("mode_line_3"), { width = ui.grow(), font_size = 13, text_color = rgba(0.74, 0.78, 0.84, 1), wrap = ui.wrap.words }),
                 },
                 metadata = {
                     label("Asset metadata", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                    label(ui.param_ref("asset_meta_1"), { font_size = 13 }),
-                    label(ui.param_ref("asset_meta_2"), { font_size = 13 }),
-                    label(ui.param_ref("asset_meta_3"), { font_size = 13 }),
+                    label(ui.param_ref("asset_meta_1"), { width = ui.grow(), font_size = 13, wrap = ui.wrap.words }),
+                    label(ui.param_ref("asset_meta_2"), { width = ui.grow(), font_size = 13, wrap = ui.wrap.words }),
+                    label(ui.param_ref("asset_meta_3"), { width = ui.grow(), font_size = 13, wrap = ui.wrap.words }),
                 },
                 renderer = {
                     label("Renderer", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
@@ -840,9 +845,15 @@ terra draw_textured_quad(tex: uint32, x: float, y: float, w: float, h: float, c:
 end
 
 terra build_text_key(cmd: compile.TextCmd, out: &int8)
-    C.snprintf(out, TEXT_KEY_CAP, "%s|%d|%d|%d|%d|%d",
+    var font_id = cmd.font_id
+    if font_id == nil then font_id = "default" end
+    C.snprintf(out, TEXT_KEY_CAP, "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d",
         cmd.text,
+        font_id,
         [int32](cmd.font_size * 10.0f),
+        [int32](cmd.w),
+        cmd.wrap,
+        cmd.align,
         to_byte(cmd.color.r),
         to_byte(cmd.color.g),
         to_byte(cmd.color.b),
@@ -896,13 +907,31 @@ terra fetch_text_texture(app: &DemoApp, cmd: compile.TextCmd, out_w: &int32, out
 
     if not C.TTF_SetFontSize(app.font, cmd.font_size) then return 0 end
 
+    if cmd.align == compile.TEXT_ALIGN_CENTER then
+        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_CENTER)
+    elseif cmd.align == compile.TEXT_ALIGN_RIGHT then
+        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_RIGHT)
+    else
+        C.TTF_SetFontWrapAlignment(app.font, C.TTF_HORIZONTAL_ALIGN_LEFT)
+    end
+
     var col: C.SDL_Color
     col.r = [uint8](to_byte(cmd.color.r))
     col.g = [uint8](to_byte(cmd.color.g))
     col.b = [uint8](to_byte(cmd.color.b))
     col.a = [uint8](to_byte(cmd.color.a))
 
-    var surf = C.TTF_RenderText_Blended(app.font, cmd.text, C.strlen(cmd.text), col)
+    var surf: &C.SDL_Surface = nil
+    var wrap_w = [int32](cmd.w)
+    if wrap_w < 1 then wrap_w = 1 end
+    if cmd.wrap == compile.TEXT_WRAP_WORDS then
+        surf = C.TTF_RenderText_Blended_Wrapped(app.font, cmd.text, C.strlen(cmd.text), col, wrap_w)
+    elseif cmd.wrap == compile.TEXT_WRAP_NEWLINES then
+        surf = C.TTF_RenderText_Blended_Wrapped(app.font, cmd.text, C.strlen(cmd.text), col, 1000000)
+    else
+        surf = C.TTF_RenderText_Blended(app.font, cmd.text, C.strlen(cmd.text), col)
+    end
+
     if surf == nil then return 0 end
     var rgba_surf = C.SDL_ConvertSurface(surf, C.SDL_PIXELFORMAT_ABGR8888)
     C.SDL_DestroySurface(surf)
@@ -924,7 +953,17 @@ terra draw_text(app: &DemoApp, cmd: compile.TextCmd)
     var h: int32 = 0
     var tex = fetch_text_texture(app, cmd, &w, &h)
     if tex == 0 then return end
-    draw_textured_quad(tex, cmd.x, cmd.y, [float](w), [float](h), color(1.0f, 1.0f, 1.0f, 1.0f))
+
+    var draw_x = cmd.x
+    if cmd.wrap == compile.TEXT_WRAP_NONE then
+        if cmd.align == compile.TEXT_ALIGN_CENTER then
+            draw_x = cmd.x + (cmd.w - [float](w)) * 0.5f
+        elseif cmd.align == compile.TEXT_ALIGN_RIGHT then
+            draw_x = cmd.x + (cmd.w - [float](w))
+        end
+    end
+
+    draw_textured_quad(tex, draw_x, cmd.y, [float](w), [float](h), color(1.0f, 1.0f, 1.0f, 1.0f))
 end
 
 terra draw_image(app: &DemoApp, cmd: compile.ImageCmd)

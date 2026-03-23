@@ -73,6 +73,11 @@ Then padding is added.
 
 Text measurement is the main measured intrinsic input.
 
+For wrapped text, TerraUI treats measurement as a height-for-width problem:
+- intrinsic width is measured as max-content width
+- wrapped height is remeasured after a concrete content width is known
+- the resulting height then propagates back into fit-height container layout
+
 ### 5.2 Image leaf
 
 Image size may interact with node `aspect_ratio`.

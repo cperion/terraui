@@ -78,7 +78,8 @@ The following declarations in `terraui.asdl` are not comments or hints. They are
 - `Plan.ClipSpec:compile_apply(CompileCtx) -> TerraQuote`
 - `Plan.ClipSpec:compile_emit_begin(CompileCtx) -> TerraQuote`
 - `Plan.ClipSpec:compile_emit_end(CompileCtx) -> TerraQuote`
-- `Plan.TextSpec:compile_measure(CompileCtx, Plan.MeasureMode) -> TerraQuote`
+- `Plan.TextSpec:compile_measure_width(CompileCtx) -> TerraQuote`
+- `Plan.TextSpec:compile_measure_height_for_width(CompileCtx, TerraQuote) -> TerraQuote`
 - `Plan.TextSpec:compile_emit(CompileCtx) -> TerraQuote`
 - `Plan.ImageSpec:compile_emit(CompileCtx) -> TerraQuote`
 - `Plan.CustomSpec:compile_emit(CompileCtx) -> TerraQuote`

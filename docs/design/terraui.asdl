@@ -576,8 +576,6 @@ module Plan {
         compile_axis(CompileCtx ctx, string axis_name) -> TerraQuote
     }
 
-    MeasureMode = MeasureWidth | MeasureHeight
-
     Guard = (
         Plan.Binding? visible_when,
         Plan.Binding? enabled_when
@@ -646,7 +644,8 @@ module Plan {
         Decl.TextAlign align
     )
     methods {
-        compile_measure(CompileCtx ctx, Plan.MeasureMode mode) -> TerraQuote
+        compile_measure_width(CompileCtx ctx) -> TerraQuote
+        compile_measure_height_for_width(CompileCtx ctx, TerraQuote max_width) -> TerraQuote
         compile_emit(CompileCtx ctx) -> TerraQuote
     }
 

@@ -47,6 +47,8 @@ local function text_cmd_to_table(c)
         font_size = tonumber(c.font_size),
         letter_spacing = tonumber(c.letter_spacing),
         line_height = tonumber(c.line_height),
+        wrap = tonumber(c.wrap),
+        align = tonumber(c.align),
         color = color_to_table(c.color),
         z = tonumber(c.z),
         seq = tonumber(c.seq),
