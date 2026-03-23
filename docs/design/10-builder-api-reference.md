@@ -223,6 +223,7 @@ ui.attach.right_bottom
 
 ```lua
 ui.float.parent
+ui.float.by_id(id)
 ```
 
 ## 5. Component and declaration constructors
@@ -346,8 +347,8 @@ local preview = card:child("preview")
 - `id` must be stable or indexed
 - scope handles are DSL-only values
 - scope handles are accepted anywhere a public `key` is accepted
-- `scope:child(name, ...)` returns another scope handle for nested instance identity
-- `scope:target(name, ...)` returns `Decl.FloatById` for a local target under that scope
+- `scope:child(name, ...)` returns another scope handle
+- `scope:ref(name, ...)` returns `Decl.FloatById` for a local target under that scope
 
 ## 5.7 `ui.use(name) { props } { children }`
 
@@ -357,12 +358,6 @@ local card = ui.scope("card1")
 
 ui.use("Card") { key = card, title = "Inspector" } {
     ui.label { ref = "body", text = "Body" },
-}
-
-ui.tooltip {
-    target = card:target("body"),
-} {
-    ui.label { text = "Tooltip" },
 }
 ```
 

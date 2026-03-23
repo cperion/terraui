@@ -330,7 +330,7 @@ Lowering notes:
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
 - `ui.scope(id)` creates a DSL-only scope handle for a stable/indexed instance key
 - `scope:child("name", ...)` composes one or more nested instance keys and returns another scope handle
-- `scope:target("name", ...)` builds `Decl.FloatById` for a local target under that scope
+- `scope:ref("name", ...)` builds `Decl.FloatById` for a local target under that scope
 - scope handles are accepted anywhere a public `key` is accepted in the DSL
 - node/widget `key = ...` expresses instance identity
 - node `ref = ...` expresses a local target name under the nearest keyed scope
@@ -422,7 +422,7 @@ local card = ui.scope("card1")
 
 ui.use(Card) { key = card } { ... }
 ui.label { ref = "header", text = "Header" }
-ui.tooltip { target = card:target("header") } { ... }
+ui.tooltip { target = card:ref("header") } { ... }
 ```
 
 Raw string ids also work in the current implementation and lower to stable ids.

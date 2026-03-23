@@ -23,7 +23,7 @@ This repository currently contains:
   - `ui.slot(...)`
   - `ui.scope(...)`
   - `scope:child(...)`
-  - `scope:target(...)`
+  - `scope:ref(...)`
   - public `key = ...` and `ref = ...` authoring
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
@@ -125,7 +125,7 @@ For identity and targeting, the DSL now centers on:
 - `ref = ...` for local target names
 - `local card = ui.scope("card")`
 - `card:child("nested_instance")`
-- `card:target("body")`
+- `card:ref("body")`
 
 A focused non-SDL example also lives at:
 
