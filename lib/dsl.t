@@ -457,7 +457,7 @@ function M.dsl()
         return make_scope(compose_scoped_id(self, ...))
     end
 
-    function Scope:ref(...)
+    function Scope:target(...)
         return Decl.FloatById(compose_scoped_id(self, ...))
     end
 
@@ -491,7 +491,6 @@ function M.dsl()
     }
     ui.float = {
         parent = Decl.FloatParent,
-        by_id = function(id) return Decl.FloatById(normalize_id(id)) end,
     }
 
     ui.scope = function(id)

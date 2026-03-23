@@ -252,7 +252,7 @@ do
     assert(nested:key().kind == "Stable")
     assert(nested:key().name == "card1/preview/header")
 
-    local ft = card_scope:ref("preview")
+    local ft = card_scope:target("preview")
     assert(ft.kind == "FloatById")
     assert(ft.id.kind == "Stable")
     assert(ft.id.name == "card1/preview")
