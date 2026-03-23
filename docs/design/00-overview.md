@@ -10,7 +10,7 @@ This file is the entry point for the TerraUI design set.
 - `docs/design/00-overview.md` — product thesis, system shape, major decisions
 - `docs/design/01-ir-and-pipeline.md` — compiler IR, phases, invariants, specialization
 - `docs/design/02-layout-input-and-rendering.md` — Clay-like layout, clipping, floating, hit testing, draw ordering
-- `docs/design/03-runtime-backends-opengl.md` — runtime types, backend contracts, OpenGL 3.3 backend, font backend
+- `docs/design/03-runtime-backends-opengl.md` — runtime types and the current OpenGL 3.3 example backend path
 - `docs/design/04-prototype-and-open-questions.md` — v1 vertical slice, demo target, unresolved questions
 - `docs/design/05-full-asdl-spec.md` — full compiler-facing ASDL specification
 - `docs/design/06-validation-rules.md` — schema, lowering, and backend validation rules

@@ -145,6 +145,32 @@ text_backend = {
 }
 ```
 
+### Concrete interface sketch
+
+```lua
+local my_text_backend = {
+    key = "backend-id",
+
+    measure_width = function(self, ctx, text_spec)
+        -- may read runtime-owned session state through ctx.frame_sym.text_backend_state
+        -- must return a Terra quote yielding a float width
+    end,
+
+    measure_height_for_width = function(self, ctx, text_spec, max_width_q)
+        -- may read runtime-owned session state through ctx.frame_sym.text_backend_state
+        -- must return a Terra quote yielding a float height
+    end,
+}
+```
+
+Current compile entry shape:
+
+```lua
+local kernel = terraui.compile(decl, {
+    text_backend = my_text_backend,
+})
+```
+
 ### Required behavior
 
 `measure_width(...)` must:
@@ -178,6 +204,25 @@ TerraUI owns:
 - command ordering contract
 - command field semantics
 - subtree clip bracketing semantics
+
+### Minimum replay interface sketch
+
+A concrete backend does not need one giant mandatory object today, but any replay implementation must be able to consume the kernel streams with behavior equivalent to:
+
+```lua
+backend = {
+    begin_frame = function(self, frame) end,
+    end_frame = function(self, frame) end,
+    apply_scissor = function(self, rect_or_nil) end,
+    draw_rect_batch = function(self, cmds, current_scissor) end,
+    draw_border_batch = function(self, cmds, current_scissor) end,
+    draw_text_batch = function(self, cmds, current_scissor, text_backend_state) end,
+    draw_image_batch = function(self, cmds, current_scissor) end,
+    draw_custom = function(self, cmd, current_scissor) end,
+}
+```
+
+Whether this is surfaced as one object, a callback table, or thin presenter hooks is an implementation detail. The semantic requirement is stable replay of the kernel command streams.
 
 ### Ordering rule
 
@@ -214,10 +259,12 @@ If a cache had to become part of the public API, that would indicate a lifetime 
 - runtime frame carries `text_backend_state`
 - SDL demo owns a concrete `TextBackendSession`
 - SDL demo uses the same owned session for measurement and rendering
+- current presenter/replay helpers (`lib/presenter.t`, `lib/opengl_backend.t`, `lib/direct_c_backend.t`) already form the seed of the broader replay contract
 
 ### Still future / broader contract work
 - unify image/custom backend state under a broader renderer session if needed
 - formalize non-text backend session attachment if more runtime-owned services appear
+- decide whether a first-class renderer session should join `text_backend_state` in the runtime frame
 - factor a full renderer backend contract distinct from the text backend contract
 
 ## 13. Recommended long-term shape

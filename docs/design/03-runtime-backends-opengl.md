@@ -1,16 +1,18 @@
-# TerraUI Runtime, Backend Contracts, and OpenGL 3.3 Design
+# TerraUI Runtime and OpenGL 3.3 Example Backend
 
 Status: draft v0.2  
 Source basis: final backend and presenter revisions in `starter-conv.txt`.
 
 ## 1. Scope
 
-This document captures the runtime-facing architecture:
+This document captures the runtime-facing architecture of the current OpenGL-oriented path:
 - generated runtime types
 - compile context contracts
-- font backend contract
+- text/font backend integration
 - OpenGL 3.3 backend design
 - presenter ordering and batching
+
+This document should be read as a **concrete backend example**, not the canonical abstract backend contract.
 
 The broader backend/session ownership contract now lives in:
 - `docs/design/12-backend-contracts.md`
@@ -112,13 +114,13 @@ It returns Terra quotes for typed command construction:
 - `make_scissor_end`
 - `make_custom_cmd`
 
-## 7. Font backend contract
+## 7. Text backend in the OpenGL example path
 
 Text is intentionally split across kernel and presenter.
 
 ### 7.1 Kernel-side text interface
 
-The font backend must expose a measurement quote generator:
+In the OpenGL example path, the text backend must expose a measurement quote generator:
 
 ```lua
 measure_quote(
