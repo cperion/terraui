@@ -119,6 +119,7 @@ ui.env
 ui.param_ref
 ui.state_ref
 ui.prop_ref
+ui.path_id
 ```
 
 ## 3.4 Namespaces
@@ -223,6 +224,7 @@ ui.attach.right_bottom
 ```lua
 ui.float.parent
 ui.float.by_id(id)
+ui.float.path(...)
 ```
 
 ## 5. Component and declaration constructors
@@ -344,6 +346,8 @@ ui.use("Card") { id = ui.stable("card1"), title = "Inspector" } {
 ```
 
 ### Notes
+- `ui.use(...)` accepts either a widget name or a `Decl.WidgetDef`
+- when the widget definition is known at capture time, required/unknown props and slot names are validated immediately
 - optional named slot arguments can be passed through `props.slots`
 - the second brace may be either:
   - an ordered child list for the conventional `children` slot
@@ -669,6 +673,7 @@ ui.env(name)
 ui.param_ref(name)
 ui.state_ref(name)
 ui.prop_ref(name)
+ui.path_id(...)
 ```
 
 ## 11. Public entrypoint helpers

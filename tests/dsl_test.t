@@ -195,7 +195,56 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 6: public compile entry works and memoizes
+-- Test 6: widget DSL validates props/slots early and exposes path helpers
+---------------------------------------------------------------------------
+
+do
+    local card = ui.widget("StrictCard") {
+        props = {
+            ui.widget_prop("title") { type = ui.types.string },
+        },
+        slots = {
+            ui.widget_slot("children"),
+        },
+        root = ui.column { id = ui.stable("root") } {
+            ui.label { text = ui.prop_ref("title") },
+            ui.slot("children"),
+        },
+    }
+
+    local ok1, err1 = pcall(function()
+        ui.use(card) { id = ui.stable("c1") } {}
+    end)
+    assert(not ok1)
+    assert(err1:match("missing required widget prop"))
+
+    local ok2, err2 = pcall(function()
+        ui.use(card) { id = ui.stable("c2"), title = "Hi", bogus = true } {}
+    end)
+    assert(not ok2)
+    assert(err2:match("unknown widget prop"))
+
+    local ok3, err3 = pcall(function()
+        ui.use(card) { id = ui.stable("c3"), title = "Hi" } {
+            side = { ui.label { text = "X" } },
+        }
+    end)
+    assert(not ok3)
+    assert(err3:match("unknown widget slot"))
+
+    local pid = ui.path_id("card1", "preview")
+    assert(pid.kind == "Stable")
+    assert(pid.name == "card1/preview")
+    local ft = ui.float.path("card1", "preview")
+    assert(ft.kind == "FloatById")
+    assert(ft.id.kind == "Stable")
+    assert(ft.id.name == "card1/preview")
+
+    print("  test 6 (widget DSL validation + path helpers): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 7: public compile entry works and memoizes
 ---------------------------------------------------------------------------
 
 do
@@ -228,7 +277,7 @@ do
     end
     assert(test() == 0)
 
-    print("  test 6 (public compile entry): ok")
+    print("  test 7 (public compile entry): ok")
 end
 
 ---------------------------------------------------------------------------

@@ -389,9 +389,9 @@ local decl = ui.component("sdl_gl_demo") {
         width = ui.grow(),
         height = ui.grow(),
     } {
-        ui.use("Shell") { id = ui.stable("app") } {
+        ui.use(Shell) { id = ui.stable("app") } {
         toolbar = {
-            ui.use("ToolbarBar") { id = ui.stable("toolbar") } {
+            ui.use(ToolbarBar) { id = ui.stable("toolbar") } {
                 primary = {
                     button("Inspect", "tool:inspect"),
                     button("Paint",   "tool:paint",   { background = rgba(0.54, 0.28, 0.18, 1), border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.78, 0.48, 0.32, 1) } }),
@@ -422,14 +422,14 @@ local decl = ui.component("sdl_gl_demo") {
                 height = ui.grow(),
                 gap = 12,
             } {
-                ui.use("HeaderBadge") {
+                ui.use(HeaderBadge) {
                     id = ui.stable("preview_header"),
                     title = ui.param_ref("preview_title"),
                     subtitle = ui.param_ref("selected_asset"),
                     accent = ui.param_ref("accent"),
                 } {},
 
-                ui.use("PreviewCard") { id = ui.stable("app/preview_card") } {
+                ui.use(PreviewCard) { id = ui.path_id("app", "preview_card") } {
                     media = {
                         ui.image_view {
                             id = ui.stable("preview"),
@@ -453,18 +453,18 @@ local decl = ui.component("sdl_gl_demo") {
                         },
                     },
                     meta = {
-                        ui.use("InfoRow") { id = ui.stable("tool_row"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
-                        ui.use("InfoRow") { id = ui.stable("selection_row"), lhs = "Selection", rhs = ui.param_ref("selected_asset") } {},
-                        ui.use("InfoRow") { id = ui.stable("mode_row"), lhs = "Mode", rhs = ui.param_ref("mode_summary") } {},
-                        ui.use("InfoRow") { id = ui.stable("state_row"), lhs = "State", rhs = ui.param_ref("detail_b") } {},
+                        ui.use(InfoRowWidget) { id = ui.stable("tool_row"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                        ui.use(InfoRowWidget) { id = ui.stable("selection_row"), lhs = "Selection", rhs = ui.param_ref("selected_asset") } {},
+                        ui.use(InfoRowWidget) { id = ui.stable("mode_row"), lhs = "Mode", rhs = ui.param_ref("mode_summary") } {},
+                        ui.use(InfoRowWidget) { id = ui.stable("state_row"), lhs = "State", rhs = ui.param_ref("detail_b") } {},
                     },
                     meters = {
-                        ui.use("ProgressMeter") { id = ui.stable("coverage_meter"), title = "Coverage", bar_width = ui.param_ref("progress_a"), fill = ui.param_ref("accent") } {},
-                        ui.use("ProgressMeter") { id = ui.stable("bake_meter"), title = "Bake completion", bar_width = ui.param_ref("progress_b"), fill = ui.param_ref("accent") } {},
+                        ui.use(ProgressMeterWidget) { id = ui.stable("coverage_meter"), title = "Coverage", bar_width = ui.param_ref("progress_a"), fill = ui.param_ref("accent") } {},
+                        ui.use(ProgressMeterWidget) { id = ui.stable("bake_meter"), title = "Bake completion", bar_width = ui.param_ref("progress_b"), fill = ui.param_ref("accent") } {},
                     },
                 },
 
-                ui.use("ActivityStrip") { id = ui.stable("activity") } {
+                ui.use(ActivityStrip) { id = ui.stable("activity") } {
                     log = {
                         label(ui.param_ref("status_primary"), { font_size = 16 }),
                         label(ui.param_ref("event_1"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
@@ -494,7 +494,7 @@ local decl = ui.component("sdl_gl_demo") {
 
                 ui.tooltip {
                     id = ui.stable("tooltip"),
-                    target = ui.float.by_id("preview_card/preview"),
+                    target = ui.float.path("app", "preview_card", "preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,
@@ -512,13 +512,13 @@ local decl = ui.component("sdl_gl_demo") {
             },
         },
         inspector = {
-            ui.use("InspectorPanel") { id = ui.stable("inspector") } {
+            ui.use(InspectorPanel) { id = ui.stable("inspector") } {
                 summary = {
                     label("Inspector", { font_size = 21 }),
                     label("Selection", { font_size = 14, text_color = rgba(0.68, 0.72, 0.78, 1) }),
-                    ui.use("InfoRow") { id = ui.stable("asset_info"), lhs = "Asset", rhs = ui.param_ref("selected_asset") } {},
-                    ui.use("InfoRow") { id = ui.stable("tool_info"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
-                    ui.use("InfoRow") { id = ui.stable("target_info"), lhs = "Target", rhs = ui.param_ref("preview_title") } {},
+                    ui.use(InfoRowWidget) { id = ui.stable("asset_info"), lhs = "Asset", rhs = ui.param_ref("selected_asset") } {},
+                    ui.use(InfoRowWidget) { id = ui.stable("tool_info"), lhs = "Tool", rhs = ui.param_ref("selected_tool") } {},
+                    ui.use(InfoRowWidget) { id = ui.stable("target_info"), lhs = "Target", rhs = ui.param_ref("preview_title") } {},
                     ui.custom {
                         id = ui.stable("accent_swatches"),
                         kind = "accent_swatches",
@@ -556,7 +556,7 @@ local decl = ui.component("sdl_gl_demo") {
             },
         },
         footer = {
-            ui.use("FooterBar") { id = ui.stable("footer") } {
+            ui.use(FooterBar) { id = ui.stable("footer") } {
                 left = {
                     label(ui.param_ref("footer_text"), { font_size = 13, text_color = rgba(0.72, 0.76, 0.82, 1) }),
                 },

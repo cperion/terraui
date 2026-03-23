@@ -146,6 +146,7 @@ Implemented now:
 - `param_ref`
 - `state_ref`
 - `prop_ref`
+- `path_id`
 - `call`
 - `select`
 - `num`
@@ -322,9 +323,11 @@ Lowering notes:
 - widget `spec.state` reuses ordinary `ui.state(...)` declarations and becomes widget-local state during bind elaboration
 - `ui.widget_prop(...)` returns `Decl.WidgetProp`
 - `ui.widget_slot(...)` returns `Decl.WidgetSlot`
-- `ui.use(...)` returns `Decl.WidgetCall`
+- `ui.use(...)` accepts either a widget name or a `Decl.WidgetDef`; when the widget is known at capture time, props/slots are validated immediately
 - `ui.slot(name)` lowers to `Decl.SlotRef(name)` inside widget bodies
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
+- `ui.path_id(...)` joins stable id path segments with `/`
+- `ui.float.path(...)` builds an explicit path-based floating target id
 - `ui.state_ref(name)` inside a widget body resolves widget-local state first, then outer component state
 - the second brace on `ui.use(...)` may be either:
   - an ordered child list for the default `children` slot
@@ -411,9 +414,14 @@ Preferred public identity helpers:
 ```lua
 ui.stable("name")
 ui.indexed("name", i)
+ui.path_id("widget_instance", "child")
 ```
 
 Raw string ids also work in the current implementation and lower to stable ids.
+
+Implementation note:
+- slash-qualified stable ids are treated as explicit paths during bind
+- that makes cross-widget target references practical without requiring lower phases to know about widgets
 
 ## 14. Error behavior
 
@@ -422,10 +430,11 @@ The current DSL fails early on:
 - malformed component root
 - invalid child entries
 - invalid ids / size / padding inputs
-- unknown widget names during bind
+- missing required widget props at DSL capture time when the widget definition is known
+- unknown widget props/slots at DSL capture time when the widget definition is known
 - duplicate widget names / prop names / slot names during bind
-- missing required widget props during bind
-- unknown or duplicate widget slot arguments during bind
+- unknown widget names during bind when the widget definition was not available at DSL capture time
+- duplicate widget slot arguments during bind
 - `ui.slot(...)` / `Decl.SlotRef(...)` used outside widget bodies during bind
 
 Further strict-key validation is still future work.

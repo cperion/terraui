@@ -21,6 +21,8 @@ This repository currently contains:
   - `ui.widget_slot(...)`
   - `ui.use(...)`
   - `ui.slot(...)`
+  - `ui.path_id(...)`
+  - `ui.float.path(...)`
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`
@@ -113,6 +115,12 @@ local decl = ui.component("demo") {
 ```
 
 Widget definitions live in `Decl`, but bind elaborates them back into canonical nodes and state slots before planning and compilation.
+
+A focused non-SDL example also lives at:
+
+```bash
+terra examples/widget_composition_example.t
+```
 
 ### Emit the raw ASDL generated from the DSL
 

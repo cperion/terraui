@@ -185,6 +185,10 @@ local function widget_prefix(ctx)
     return scope .. "/"
 end
 
+local function is_explicit_path_name(name)
+    return type(name) == "string" and name:find("/", 1, true) ~= nil
+end
+
 local function resolve_id(decl_id, ctx, local_id, opts)
     opts = opts or {}
     if decl_id.kind == "Auto" then
@@ -192,7 +196,7 @@ local function resolve_id(decl_id, ctx, local_id, opts)
             ctx:path_string() .. "/__auto_" .. local_id, 0)
     elseif decl_id.kind == "Stable" then
         local base = decl_id.name
-        if not opts.suppress_widget_prefix then
+        if not opts.suppress_widget_prefix and not is_explicit_path_name(base) then
             base = widget_prefix(ctx) .. base
         end
         return Bound.ResolvedId(base, 0)
@@ -203,7 +207,7 @@ local function resolve_id(decl_id, ctx, local_id, opts)
             salt = bound_idx.v
         end
         local base = decl_id.name
-        if not opts.suppress_widget_prefix then
+        if not opts.suppress_widget_prefix and not is_explicit_path_name(base) then
             base = widget_prefix(ctx) .. base
         end
         return Bound.ResolvedId(base, salt)

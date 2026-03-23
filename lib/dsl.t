@@ -199,32 +199,92 @@ local function is_named_slot_map(v)
     return saw_named
 end
 
-local function normalize_slot_args(props, children)
-    local slot_args = List()
+local function normalized_path_name(...)
+    local parts = {}
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if type(v) == "string" then
+            parts[#parts + 1] = v
+        elseif is_decl_id(v) then
+            if v.kind ~= "Stable" then
+                error("path_id only supports stable/string segments")
+            end
+            parts[#parts + 1] = v.name
+        else
+            error("invalid path_id segment")
+        end
+    end
+    return table.concat(parts, "/")
+end
 
+local function widget_fields(def)
+    if def == nil then return nil end
+    local props = {}
+    local slots = {}
+    for _, p in ipairs(def.props) do props[p.name] = p end
+    for _, s in ipairs(def.slots) do slots[s.name] = true end
+    return props, slots
+end
+
+local function validate_widget_props(def, props)
+    if def == nil then return end
+    local prop_defs = widget_fields(def)
+    for k, _ in pairs(props) do
+        if k ~= "id" and k ~= "slots" and prop_defs[k] == nil then
+            error("unknown widget prop in DSL for " .. def.name .. ": " .. tostring(k))
+        end
+    end
+    for name, p in pairs(prop_defs) do
+        if props[name] == nil and p.default == nil then
+            error("missing required widget prop in DSL for " .. def.name .. ": " .. name)
+        end
+    end
+end
+
+local function normalize_slot_args(props, children, def)
+    local slot_args = List()
+    local slot_sources = {}
     local slot_map = props.slots or {}
-    local slot_names = {}
-    for slot_name, _ in pairs(slot_map) do slot_names[#slot_names + 1] = slot_name end
+
+    for slot_name, slot_children in pairs(slot_map) do
+        if slot_sources[slot_name] ~= nil then
+            error("duplicate widget slot source in DSL: " .. slot_name)
+        end
+        slot_sources[slot_name] = slot_children
+    end
 
     local child_payload = children
     if is_named_slot_map(children) then
         child_payload = nil
-        for slot_name, _ in pairs(children) do slot_names[#slot_names + 1] = slot_name end
-    end
-
-    table.sort(slot_names)
-    local seen = {}
-    for _, slot_name in ipairs(slot_names) do
-        if not seen[slot_name] then
-            seen[slot_name] = true
-            local source = slot_map[slot_name]
-            if source == nil and is_named_slot_map(children) then source = children[slot_name] end
-            slot_args:insert(Decl.SlotArg(slot_name, normalize_children(source)))
+        for slot_name, slot_children in pairs(children) do
+            if slot_sources[slot_name] ~= nil then
+                error("duplicate widget slot source in DSL: " .. slot_name)
+            end
+            slot_sources[slot_name] = slot_children
         end
     end
 
     if child_payload ~= nil then
-        slot_args:insert(Decl.SlotArg("children", normalize_children(child_payload)))
+        if slot_sources.children ~= nil then
+            error("duplicate widget slot source in DSL: children")
+        end
+        slot_sources.children = child_payload
+    end
+
+    if def ~= nil then
+        local _, slot_defs = widget_fields(def)
+        for slot_name, _ in pairs(slot_sources) do
+            if slot_name ~= "children" and slot_defs[slot_name] == nil then
+                error("unknown widget slot in DSL for " .. def.name .. ": " .. tostring(slot_name))
+            end
+        end
+    end
+
+    local slot_names = {}
+    for slot_name, _ in pairs(slot_sources) do slot_names[#slot_names + 1] = slot_name end
+    table.sort(slot_names)
+    for _, slot_name in ipairs(slot_names) do
+        slot_args:insert(Decl.SlotArg(slot_name, normalize_children(slot_sources[slot_name])))
     end
 
     return slot_args
@@ -255,6 +315,7 @@ end
 
 function M.dsl()
     local ui = {}
+    local widget_registry = {}
 
     ui.types = {
         bool = Decl.TBool,
@@ -287,7 +348,10 @@ function M.dsl()
     ui.float = {
         parent = Decl.FloatParent,
         by_id = function(id) return Decl.FloatById(normalize_id(id)) end,
+        path = function(...) return Decl.FloatById(Decl.Stable(normalized_path_name(...))) end,
     }
+
+    ui.path_id = function(...) return Decl.Stable(normalized_path_name(...)) end
 
     ui.as_expr = M.as_expr
     ui.num = function(v) return Decl.NumLit(v) end
@@ -381,7 +445,12 @@ function M.dsl()
             local slots = List()
             for _, s in ipairs(spec.slots or {}) do slots:insert(s) end
             assert(spec.root and is_decl_node(spec.root), "widget.root must be a Decl.Node")
-            return Decl.WidgetDef(name, props, state, slots, spec.root)
+            local def = Decl.WidgetDef(name, props, state, slots, spec.root)
+            if widget_registry[name] ~= nil and widget_registry[name] ~= def then
+                error("duplicate widget name in DSL environment: " .. name)
+            end
+            widget_registry[name] = def
+            return def
         end
     end
 
@@ -389,11 +458,22 @@ function M.dsl()
         return Decl.SlotRef(name)
     end
 
-    ui.use = function(name)
+    ui.use = function(widget)
+        local def, name
+        if is_decl_widget_def(widget) then
+            def = widget
+            name = widget.name
+            widget_registry[name] = widget
+        else
+            name = widget
+            def = widget_registry[name]
+        end
+        assert(type(name) == "string", "ui.use expects widget name or Decl.WidgetDef")
         return function(props)
             props = props or {}
+            validate_widget_props(def, props)
             return function(children)
-                local slot_args = normalize_slot_args(props, children)
+                local slot_args = normalize_slot_args(props, children, def)
 
                 local prop_args = List()
                 local prop_names = {}
@@ -417,7 +497,10 @@ function M.dsl()
             local state = List()
             for _, s in ipairs(spec.state or {}) do state:insert(s) end
             local widgets = List()
-            for _, w in ipairs(spec.widgets or {}) do widgets:insert(w) end
+            for _, w in ipairs(spec.widgets or {}) do
+                assert(is_decl_widget_def(w), "component.widgets entries must be Decl.WidgetDef")
+                widgets:insert(w)
+            end
             assert(spec.root and is_decl_node(spec.root), "component.root must be a Decl.Node")
             return Decl.Component(name, params, state, widgets, spec.root)
         end
