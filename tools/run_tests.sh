@@ -11,3 +11,4 @@ terra tests/bind_test.t
 terra tests/plan_test.t
 terra tests/compile_test.t
 terra tests/dsl_test.t
+terra tests/presenter_test.t

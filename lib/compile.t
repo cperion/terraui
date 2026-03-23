@@ -763,9 +763,13 @@ end
 
 local function node_z_binding(ctx, node_index)
     local node = ctx.plan.nodes[node_index + 1]
-    if node.float_slot then
-        local fs = ctx.plan.floats[node.float_slot + 1]
-        return fs.z_index:compile_number(ctx)
+    while node do
+        if node.float_slot then
+            local fs = ctx.plan.floats[node.float_slot + 1]
+            return fs.z_index:compile_number(ctx)
+        end
+        if node.parent == nil then break end
+        node = ctx.plan.nodes[node.parent + 1]
     end
     return `0.0f
 end

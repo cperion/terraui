@@ -6,6 +6,7 @@ local bind = require("lib/bind")
 local plan = require("lib/plan")
 local compile = require("lib/compile")
 local dsl = require("lib/dsl")
+local presenter = require("lib/presenter")
 
 local plan_registry = {}
 
@@ -19,6 +20,7 @@ local M = {}
 M.schema = schema
 M.types = schema.types
 M.dsl = dsl.dsl
+M.presenter = presenter
 
 function M.bind(decl_component, opts)
     return bind.bind_component(decl_component, opts)
