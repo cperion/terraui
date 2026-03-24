@@ -1267,11 +1267,15 @@ function Plan.Paint:compile_emit(ctx, node_index)
     if self.background then
         local color = self.background:compile_color(ctx)
         stmts:insert(quote
+            var x0 = C.floorf([frame].nodes[node_index].x)
+            var y0 = C.floorf([frame].nodes[node_index].y)
+            var w0 = C.floorf([frame].nodes[node_index].w + 0.5f)
+            var h0 = C.floorf([frame].nodes[node_index].h + 0.5f)
             var idx = [frame].rect_count
-            [frame].rects[idx].x = [frame].nodes[node_index].x
-            [frame].rects[idx].y = [frame].nodes[node_index].y
-            [frame].rects[idx].w = [frame].nodes[node_index].w
-            [frame].rects[idx].h = [frame].nodes[node_index].h
+            [frame].rects[idx].x = x0
+            [frame].rects[idx].y = y0
+            [frame].rects[idx].w = w0
+            [frame].rects[idx].h = h0
             [frame].rects[idx].color = [color]
             [frame].rects[idx].opacity = [opacity]
             [frame].rects[idx].z = [z]
@@ -1640,11 +1644,15 @@ function Plan.TextSpec:compile_emit(ctx)
 
     return quote
         if [frame].nodes[self.node_index].visible then
+            var x0 = C.floorf([frame].nodes[self.node_index].content_x)
+            var y0 = C.floorf([frame].nodes[self.node_index].content_y)
+            var w0 = C.floorf([frame].nodes[self.node_index].content_w + 0.5f)
+            var h0 = C.floorf([frame].nodes[self.node_index].content_h + 0.5f)
             var idx = [frame].text_count
-            [frame].texts[idx].x = [frame].nodes[self.node_index].content_x
-            [frame].texts[idx].y = [frame].nodes[self.node_index].content_y
-            [frame].texts[idx].w = [frame].nodes[self.node_index].content_w
-            [frame].texts[idx].h = [frame].nodes[self.node_index].content_h
+            [frame].texts[idx].x = x0
+            [frame].texts[idx].y = y0
+            [frame].texts[idx].w = w0
+            [frame].texts[idx].h = h0
             [frame].texts[idx].text = [text]
             [frame].texts[idx].font_id = [font_id]
             [frame].texts[idx].font_size = [font_size]
@@ -1778,22 +1786,16 @@ function CompileCtx:compile_layout_fn()
     --   3. width_resolve (TD)  — assign w, content_w to every node
     --   4. height_measure(BU)  — want_h using real content_w (text wrapping)
     --   5. layout        (TD)  — assign h, x, y; scroll clamp; clip
-    --
-    -- Scrollbars are overlay floats (don't take width), so there is no
-    -- vbar-visibility ↔ viewport-width cycle.  One iteration suffices.
     ---------------------------------------------------------------------------
 
-    -- Pass 1: guard eval (top-down, preorder)
     for _, node in ipairs(nodes) do
         stmts:insert(self:emit_guard_eval(node))
     end
 
-    -- Pass 2: width measure (bottom-up, postorder)
     for i = #nodes, 1, -1 do
         stmts:insert(self:emit_width_measure(nodes[i]))
     end
 
-    -- Pass 3: width resolve (top-down, preorder; floats after flow nodes)
     local i = 1
     while i <= #nodes do
         local node = nodes[i]
@@ -1807,7 +1809,6 @@ function CompileCtx:compile_layout_fn()
     for _, fs in ipairs(self.plan.floats) do
         stmts:insert(self:emit_float_width_resolve(fs))
         local root = nodes[fs.node_index + 1]
-        -- width-resolve the float root itself (sets content_w, distributes to children)
         stmts:insert(self:emit_width_resolve(root))
         local j = root.index + 2
         while j <= root.subtree_end do
@@ -1821,12 +1822,10 @@ function CompileCtx:compile_layout_fn()
         end
     end
 
-    -- Pass 4: height measure (bottom-up, postorder)
     for i = #nodes, 1, -1 do
         stmts:insert(self:emit_height_measure(nodes[i]))
     end
 
-    -- Pass 5: full layout (top-down, preorder; floats after flow)
     do
         local i = 1
         while i <= #nodes do
@@ -1855,33 +1854,9 @@ function CompileCtx:compile_layout_fn()
         end
     end
 
-    -- Pass 6: pixel-snap — round all positions to integer pixels so text
-    -- and rects share the same grid.  Positions floor, sizes preserve the
-    -- snapped right/bottom edge, clips snap inward.
-    local node_count = self.node_count
     return terra([frame])
         escape
             for _, s in ipairs(stmts) do emit(s) end
-        end
-        for i = 0, [node_count - 1] do
-            var x0 = C.floorf([frame].nodes[i].x)
-            var y0 = C.floorf([frame].nodes[i].y)
-            [frame].nodes[i].w = C.floorf([frame].nodes[i].x + [frame].nodes[i].w + 0.5f) - x0
-            [frame].nodes[i].h = C.floorf([frame].nodes[i].y + [frame].nodes[i].h + 0.5f) - y0
-            [frame].nodes[i].x = x0
-            [frame].nodes[i].y = y0
-
-            var cx0 = C.floorf([frame].nodes[i].content_x)
-            var cy0 = C.floorf([frame].nodes[i].content_y)
-            [frame].nodes[i].content_w = C.floorf([frame].nodes[i].content_x + [frame].nodes[i].content_w + 0.5f) - cx0
-            [frame].nodes[i].content_h = C.floorf([frame].nodes[i].content_y + [frame].nodes[i].content_h + 0.5f) - cy0
-            [frame].nodes[i].content_x = cx0
-            [frame].nodes[i].content_y = cy0
-
-            [frame].nodes[i].clip_x0 = C.ceilf([frame].nodes[i].clip_x0)
-            [frame].nodes[i].clip_y0 = C.ceilf([frame].nodes[i].clip_y0)
-            [frame].nodes[i].clip_x1 = C.floorf([frame].nodes[i].clip_x1)
-            [frame].nodes[i].clip_y1 = C.floorf([frame].nodes[i].clip_y1)
         end
     end
 end

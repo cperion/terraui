@@ -187,19 +187,36 @@ Validator rule:
 2. Widget prop names must be unique inside one `Decl.WidgetDef`.
 3. Widget-local state names must be unique inside one `Decl.WidgetDef`.
 4. Widget slot names must be unique inside one `Decl.WidgetDef`.
-5. `WidgetCall(name, ...)` must refer to an existing widget definition.
-6. Unknown widget props are illegal.
-7. Duplicate widget prop arguments are illegal.
-8. Missing required widget props are illegal.
-9. Widget prop expressions/defaults with known types must be compatible with the declared widget prop type.
-10. Unknown widget slots are illegal.
-11. Duplicate widget slot arguments are illegal.
-12. `SlotRef(name)` is only valid while elaborating a widget body.
-13. `WidgetPropRef(name)` is only valid while binding a widget body.
-14. `StateRef(name)` inside a widget body may refer to widget-local state first, then component state.
-15. Direct or mutual recursive widget expansion is illegal in v1.
+5. Widget part names must be unique inside one `Decl.WidgetDef`.
+6. `WidgetCall(name, ...)` must refer to an existing widget definition.
+7. Unknown widget props are illegal.
+8. Duplicate widget prop arguments are illegal.
+9. Missing required widget props are illegal.
+10. Widget prop expressions/defaults with known types must be compatible with the declared widget prop type.
+11. Unknown widget slots are illegal.
+12. Duplicate widget slot arguments are illegal.
+13. Unknown widget part-style targets are illegal.
+14. Duplicate widget part-style arguments are illegal.
+15. `SlotRef(name)` is only valid while elaborating a widget body.
+16. `WidgetPropRef(name)` is only valid while binding a widget body.
+17. A node tagged as `part = name` inside a widget body must refer to a declared widget part.
+18. `StateRef(name)` inside a widget body may refer to widget-local state first, then component state.
+19. Direct or mutual recursive widget expansion is illegal in v1.
 
-## 5.4 Layout rules
+## 5.4 Theme and style rules
+
+1. Theme names must be unique inside one `Decl.Component`.
+2. Theme token names must be unique inside one `Decl.ThemeDef`.
+3. Theme parent chains must be acyclic.
+4. Theme token values must bind to the declared token type.
+5. Theme-scope base-theme names must resolve.
+6. Theme-scope overrides must target known tokens or be explicitly permitted as late-bound env tokens.
+7. `TokenRef(name)` must resolve through the active lexical theme environment or fail clearly.
+8. `StylePatch` may only contain presentational fields from the declared style-patch surface.
+9. Style-patch fields must type-check against the target paint field they override.
+10. Style patches must not mutate structural node fields such as layout axis, size rules, scroll, floating, or input policy.
+
+## 5.5 Layout rules
 
 1. Constant `Percent(value)` must satisfy `0 <= value <= 1`.
 2. Constant padding values should be `>= 0` unless negative layout is intentionally enabled later.
@@ -207,48 +224,48 @@ Validator rule:
 4. Constant aspect ratio must be `> 0`.
 5. `Fit(min,max)` and `Grow(min,max)` must satisfy `min <= max` when both are constant.
 
-## 5.5 Decor rules
+## 5.6 Decor rules
 
 1. Constant opacity must be in `[0,1]`.
 2. Constant corner radii should be `>= 0`.
 3. Constant border thickness values should be `>= 0`.
 
-## 5.6 Clip and scroll rules
+## 5.7 Clip and scroll rules
 
 1. `Clip(horizontal=false, vertical=false)` is meaningless and should be rejected or warned.
 2. `Scroll(horizontal=false, vertical=false)` is meaningless and should be rejected.
 3. Scroll offsets are runtime-managed; authored structural scroll declarations should not carry `scroll_x` / `scroll_y` expressions.
 4. If a node carries both explicit `Clip` and `Scroll`, effective clip is the union of enabled axes.
 
-## 5.7 Floating rules
+## 5.8 Floating rules
 
 1. `FloatById` targets must resolve after binding.
 2. A floating node attached to `FloatParent` requires a real parent; floating root nodes to parent is invalid.
 3. Constant z-index values should be finite.
 
-## 5.8 Text rules
+## 5.9 Text rules
 
 1. Constant `font_size` should be `> 0`.
 2. Constant `line_height` should be `> 0`.
 3. Constant `letter_spacing` may be negative only if the text backend explicitly allows it.
 4. `content` must bind to a string-typed value at type-check time.
 
-## 5.9 Image rules
+## 5.10 Image rules
 
 1. `image_id` must bind to an image-compatible value.
 2. `fit` must be one of the declared enum values only.
 
-## 5.10 Custom leaf rules
+## 5.11 Custom leaf rules
 
 1. `kind` must be non-empty.
 2. Payload typing rules are backend/product policy and should be checked separately.
 
-## 5.11 Expression rules
+## 5.12 Expression rules
 
 1. `ParamRef` must refer to an existing parameter.
 2. `StateRef` must refer to an existing state slot.
 3. `WidgetPropRef` must refer to an existing widget prop in the current widget elaboration frame.
-4. `ThemeRef` must be fully resolved or converted into an explicit environment/bound value during binding.
+4. `TokenRef` must be fully resolved or converted into an explicit environment/bound value during binding.
 5. `EnvRef` names must belong to the allowed environment surface.
 6. `Call(fn, args)` must resolve to a known intrinsic during binding unless user-defined intrinsics are explicitly supported.
 
@@ -256,9 +273,10 @@ Validator rule:
 
 ## 6.1 Canonicalization rules
 
-1. `Bound.Value` must contain no theme sugar.
+1. `Bound.Value` must contain no theme/token sugar.
 2. `Bound.Value` must contain no unresolved author names except explicit environment names.
-3. Slot numbering for params and state must be deterministic.
+3. Bound trees must contain no widget-part or style-patch authored metadata.
+4. Slot numbering for params and state must be deterministic.
 
 ## 6.2 Specialization key rules
 

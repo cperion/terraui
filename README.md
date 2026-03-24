@@ -59,7 +59,38 @@ Text wrapping is modeled at the TerraUI level and measured through a pluggable c
 make test
 ```
 
+### Run the SDL+OpenGL demo directly in the Terra process
+
+If your Terra build can link/run SDL + OpenGL in-process, this is now the primary demo path:
+
+```bash
+make demo-direct
+```
+
+Direct-path smoke run:
+
+```bash
+make demo-direct-smoke
+```
+
+You can also invoke it manually and pass the same runtime args as the built executable:
+
+```bash
+terra examples/run_sdl_gl_demo.t
+terra examples/run_sdl_gl_demo.t 120
+terra examples/run_sdl_gl_demo.t 2 hidden
+```
+
+To override the font used while capturing the demo entrypoint from `examples/build_sdl_gl_demo.t`:
+
+```bash
+terra examples/run_sdl_gl_demo.t --font /path/to/font.ttf
+terra examples/run_sdl_gl_demo.t --font /path/to/font.ttf 2 hidden
+```
+
 ### Build the SDL+OpenGL AOT demo
+
+AOT is still available when you want a standalone executable:
 
 ```bash
 make demo

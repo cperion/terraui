@@ -39,11 +39,11 @@ local function child_list(xs)
     end
     return out
 end
-local function component(name, params, state, root, widgets)
-    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+local function component(name, params, state, root, widgets, themes)
+    return Decl.Component(name, params or List(), state or List(), themes or List(), widgets or List(), root)
 end
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, nil, nil, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 local function make_node(name, axis, w, h, pad, gap, children)
     return node(
@@ -747,7 +747,7 @@ do
     local k = full_pipeline(component(
         "scroll_offsets", List(), List(),
         Decl.Node(
-            Decl.Stable("root"), no_vis(),
+            Decl.Stable("root"), nil, nil, no_vis(),
             Decl.Layout(Decl.Row,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
                 zero_padding(), zero,
@@ -790,7 +790,7 @@ do
     local k = full_pipeline(component(
         "scroll_wheel", List(), List(),
         Decl.Node(
-            Decl.Stable("root"), no_vis(),
+            Decl.Stable("root"), nil, nil, no_vis(),
             Decl.Layout(Decl.Column,
                 Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(50)),
                 zero_padding(), zero,
@@ -1001,6 +1001,60 @@ do
 
     assert(test() == 0, "test 20 failed at " .. tostring(test()))
     print("  test 20 (input transitions): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 20a: emitted paint snaps fractional placement to integer pixels
+---------------------------------------------------------------------------
+
+do
+    local style = text_style(12, Decl.WrapNone)
+    local k = full_pipeline(component(
+        "emit_snap", List(), List(),
+        node(
+            Decl.Stable("root"), no_vis(),
+            Decl.Layout(Decl.Row,
+                Decl.Fixed(Decl.NumLit(100)), Decl.Fixed(Decl.NumLit(37)),
+                zero_padding(), zero,
+                Decl.AlignLeft, Decl.AlignCenterY),
+            no_decor(), nil, nil, no_input(), nil, nil,
+            List{
+                node(
+                    Decl.Stable("child"), no_vis(),
+                    Decl.Layout(Decl.Row,
+                        Decl.Fixed(Decl.NumLit(20)), Decl.Fixed(Decl.NumLit(10)),
+                        zero_padding(), zero,
+                        Decl.AlignLeft, Decl.AlignTop),
+                    Decl.Decor(
+                        Decl.ColorLit(0.2, 0.3, 0.4, 1.0),
+                        nil,
+                        nil,
+                        nil),
+                    nil, nil, no_input(), nil,
+                    Decl.Text(Decl.TextLeaf(Decl.StringLit("X"), style)),
+                    List()),
+            })))
+
+    local Frame = k:frame_type()
+    local init_q = k.kernels.init_fn
+    local run_q = k.kernels.run_fn
+
+    local test = terra()
+        var f : Frame
+        [init_q](&f)
+        f.viewport_w = 100; f.viewport_h = 100
+        [run_q](&f)
+        if f.nodes[1].y ~= 13.5f then return 1 end
+        if f.rect_count ~= 1 then return 2 end
+        if f.text_count ~= 1 then return 3 end
+        if f.rects[0].y ~= 13 then return 4 end
+        if f.rects[0].h ~= 10 then return 5 end
+        if f.texts[0].y ~= 13 then return 6 end
+        return 0
+    end
+
+    assert(test() == 0, "test 21a failed at " .. tostring(test()))
+    print("  test 21a (rect/text emission snaps fractional placement): ok")
 end
 
 ---------------------------------------------------------------------------

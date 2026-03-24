@@ -223,6 +223,8 @@ Convert one authored node into one canonical bound node.
 - allocate deterministic local id
 - resolve stable id
 - bind visibility, layout, decor, clip, floating, input, aspect ratio, leaf, children
+- apply any lexical theme scope carried on the node while binding the subtree
+- if the node is tagged with a widget part name during widget elaboration, validate that part name and merge any active part-local style patch into the node’s presentational fields before producing `Bound`
 - elaborate `Decl.Child` entries:
   - `NodeChild` binds directly
   - `WidgetChild` resolves the widget definition and elaborates it away
@@ -233,6 +235,7 @@ Convert one authored node into one canonical bound node.
 
 - every bound node has exactly one resolved stable id
 - authoring sugar is removed
+- theme scopes, part names, and style patches do not survive into `Bound`
 - no child reordering occurs
 
 ### Validation expectations
@@ -296,6 +299,11 @@ Bind all four padding expressions.
 ### Purpose
 
 Bind optional background, border, radius, and opacity.
+
+### Required behavior
+
+- bind authored decor values after theme-token resolution
+- allow validated part-local style patches to override these fields before producing `Bound.Decor`
 
 ### Must guarantee
 
@@ -410,6 +418,11 @@ Bind text content and text style.
 
 Bind text styling expressions.
 
+### Required behavior
+
+- bind authored text style values after theme-token resolution
+- allow validated part-local style patches to override text-paint fields before producing `Bound.TextStyle`
+
 ### Validation expectations
 
 - constant font size > 0
@@ -444,14 +457,14 @@ Lower rich authored expressions into canonical bound values.
 ### Required behavior
 
 - resolve params and states to slots
-- eliminate theme sugar
+- resolve token references through the active lexical theme environment
 - preserve only explicit env references
 - fold obvious constant expressions when safe
 - map calls to canonical intrinsics
 
 ### Must guarantee
 
-- no authored naming sugar survives except allowed env slot names
+- no authored theme/token naming sugar survives except allowed env slot names
 - output fits `Bound.Value`
 
 ### Exhaustiveness requirement

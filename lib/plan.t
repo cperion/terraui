@@ -134,12 +134,25 @@ function PlanCtx:finish_component(key, root_index)
             "plan: missing node at index " .. i)
         nodes:insert(self._node_table[i])
     end
-    return Plan.Component(
+    -- Build reverse map: node_index -> stable id string
+    local stable_id_labels = {}
+    for key, idx in pairs(self._stable_id_map) do
+        -- key is "base:salt", extract just the last meaningful segment
+        local base = key:match("^(.+):%d+$") or key
+        -- Take the last path component, strip __auto_ prefix
+        local short = base:match("[^/]+$") or base
+        short = short:gsub("^__auto_", "#")
+        stable_id_labels[idx] = short
+    end
+
+    local comp = Plan.Component(
         key, nodes,
         self._guards, self._paints, self._inputs,
         self._clips, self._scrolls, self._scroll_controls, self._texts, self._images,
         self._customs, self._floats,
         root_index)
+    comp._stable_id_labels = stable_id_labels
+    return comp
 end
 
 ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ Important clarification:
 - child helpers such as `each`, `when`, `maybe`, and `fragment` operate at **capture time in Lua**, not as runtime dynamic node replication inside the kernel
 - first-class widget definitions and widget calls now exist at the `Decl` layer
 - widgets are **fully elaborated during bind**, so `Bound`, `Plan`, and `Kernel` stay widget-free and canonical
+- the current implementation still exposes `ui.theme(...)` only as thin theme/env sugar; the richer token/part/style model described later in this document is a design target
 - the current public compile path is:
 
 ```text
@@ -170,6 +171,17 @@ Implemented now:
 - `scroll.page_dec`
 - `scroll.page_inc`
 
+Design target next:
+- `theme_def`
+- `theme_token`
+- `with_theme`
+- `token`
+- `token.color`
+- `token.number`
+- `widget_part`
+- `part`
+- `style`
+
 ### 5.3 Layer 3 — child fragment helpers
 
 Implemented now:
@@ -181,6 +193,15 @@ Implemented now:
 ### Important constraint
 
 These helpers are **capture-time** helpers. They help build the authored `Decl` tree in Lua. They do **not** currently imply runtime-varying child counts inside the compiled kernel.
+
+The same intended rule applies to the next styling layer:
+- theme defs
+- theme scopes
+- token refs
+- widget parts
+- style patches
+
+are all authored `Decl` concepts that should elaborate away during bind rather than survive into the runtime kernel.
 
 ## 6. Canonical authoring style
 
@@ -456,7 +477,33 @@ Implementation note:
 - bind propagates keyed scopes so local `ref = ...` names resolve under the nearest keyed ancestor or widget instance
 - that keeps cross-widget target references practical without requiring lower phases to know about widgets
 
-## 14. Error behavior
+## 14. Next styling/theming design target
+
+The next public authoring layer should add:
+
+```lua
+ui.theme_def("dark") { ... }
+ui.theme_token("color.surface.panel", ui.types.color, ui.rgba(...))
+ui.with_theme("dark") { ... }
+ui.token("color.surface.panel")
+ui.token.color("color.text.primary")
+ui.widget_part("root")
+ui.part("root", child)
+ui.style { background = ..., text_color = ... }
+```
+
+Design intent:
+- themes provide typed token values
+- widgets expose explicit named parts
+- widget calls may pass part-local style patches
+- styled widget variants should usually just be widgets composed from widgets
+- all of this remains authored `Decl` surface and should elaborate away during bind
+
+See:
+- `docs/design/14-widget-styling-and-themes.md`
+- `docs/design/15-painting-model.md`
+
+## 15. Error behavior
 
 The current DSL fails early on:
 - missing required props for several built-in widgets (`label.text`, `button.text`, `image_view.image`, `custom.kind`)
@@ -474,14 +521,14 @@ The current DSL fails early on:
 
 Further strict-key validation is still future work.
 
-## 15. Where `__methodmissing` fits
+## 16. Where `__methodmissing` fits
 
 Per `terra-compiler-pattern.md`:
 - the public authoring DSL does **not** use `__methodmissing`
 - the DSL is plain Lua capture lowering into `Decl`
 - `__methodmissing` remains a tool for generated Terra runtime/backend types when Terra syntax itself should trigger compile-time specialization
 
-## 16. Public compile entry
+## 17. Public compile entry
 
 The public entrypoint currently lives in:
 
@@ -496,13 +543,13 @@ Main functions:
 
 `terraui.compile(...)` runs the full pipeline and returns `Kernel.Component`.
 
-## 17. Memoization note
+## 18. Memoization note
 
 The public compile entry is memoized.
 
 Current implementation memoizes by a deterministic string derived from `Plan.Component.key`. That gives a stable public caching path without adding a custom heavyweight cache layer beyond Terra's own memoization machinery.
 
-## 18. Design conclusion
+## 19. Design conclusion
 
 The shipped v1 authoring surface is now:
 

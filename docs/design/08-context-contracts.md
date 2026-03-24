@@ -75,8 +75,11 @@ But equal compilation inputs must still produce equal outputs.
 
 - slot allocation for params and state
 - widget-definition registration and lookup
+- theme-definition registration and lookup
 - widget prop / slot environment management during widget elaboration
-- theme resolution
+- lexical theme-scope management
+- token resolution
+- widget-part validation and part-style patch management during widget elaboration
 - intrinsic resolution
 - deterministic node-id allocation
 - deterministic widget-instance allocation
@@ -89,22 +92,35 @@ The final design discussion converged on a surface like this:
 
 ```lua
 BindCtx = {
-    param_slot          = function(self, name) -> number end,
-    state_slot          = function(self, name) -> number end,
-    register_widget     = function(self, def) end,
-    widget_def          = function(self, name) -> Decl.WidgetDef end,
-    resolve_widget_prop = function(self, name) -> Bound.Value end,
-    resolve_slot_children = function(self, name) -> Decl.Child* end,
-    bind_widget_call    = function(self, call) -> Bound.Node end,
-    resolve_theme       = function(self, name) -> any end,
-    resolve_intrinsic   = function(self, fn, arity) -> string? end,
+    param_slot            = function(self, name) -> number end,
+    state_slot            = function(self, name) -> number end,
 
-    alloc_node_id       = function(self) -> number end,
-    alloc_widget_id     = function(self) -> number end,
-    push_path           = function(self, base, local_id) end,
-    pop_path            = function(self) end,
-    path_string         = function(self) -> string end,
-    widget_scope_string = function(self) -> string? end,
+    register_widget       = function(self, def) end,
+    widget_def            = function(self, name) -> Decl.WidgetDef end,
+    register_theme        = function(self, def) end,
+    theme_def             = function(self, name) -> Decl.ThemeDef end,
+
+    resolve_widget_prop   = function(self, name) -> Bound.Value end,
+    resolve_slot_children = function(self, name) -> Decl.Child* end,
+    bind_widget_call      = function(self, call) -> Bound.Node end,
+
+    push_theme_scope      = function(self, scope) end,
+    pop_theme_scope       = function(self) end,
+    resolve_token         = function(self, name) -> Bound.Value end,
+
+    push_part_styles      = function(self, widget_name, styles) end,
+    pop_part_styles       = function(self) end,
+    validate_widget_part  = function(self, name) end,
+    part_style_patch      = function(self, name) -> Decl.StylePatch? end,
+
+    resolve_intrinsic     = function(self, fn, arity) -> string? end,
+
+    alloc_node_id         = function(self) -> number end,
+    alloc_widget_id       = function(self) -> number end,
+    push_path             = function(self, base, local_id) end,
+    pop_path              = function(self) end,
+    path_string           = function(self) -> string end,
+    widget_scope_string   = function(self) -> string? end,
 }
 ```
 
@@ -135,21 +151,52 @@ Return the deterministic slot index for a state slot name.
 - slot numbering is stable in declaration order for component state
 - widget-local state slot numbering is stable in widget-expansion order
 
-## 4.5 `resolve_theme(name) -> any`
+## 4.5 `register_theme(def)` / `theme_def(name) -> Decl.ThemeDef`
 
 ### Purpose
-Resolve a theme reference during binding.
+Register and retrieve named theme definitions during one bind pass.
 
 ### Required behavior
-Must return one of:
-- a constant bindable value
-- an environment-backed reference description
-- failure if the theme symbol is unknown
+- register component-local theme definitions before they are referenced
+- reject duplicate theme names
+- return the exact authored `Decl.ThemeDef` for a known name
+- fail clearly for unknown themes
 
 ### Must guarantee
-- theme sugar does not survive into `Bound.Value` except through explicit allowed environment/value forms
+- theme lookup is deterministic within one bind pass
+- theme parent chains can be validated deterministically
 
-## 4.6 `resolve_intrinsic(fn, arity) -> string?`
+## 4.6 `push_theme_scope(scope)` / `pop_theme_scope()` / `resolve_token(name) -> Bound.Value`
+
+### Purpose
+Manage the active lexical theme environment and resolve token references.
+
+### Required behavior
+- pushing a scope must make its base theme and local overrides visible to descendant binds
+- nested scopes must shadow outer scopes deterministically
+- `resolve_token(name)` must return a bindable canonical value or fail clearly
+
+### Must guarantee
+- token/theme sugar does not survive into `Bound.Value` except through explicit allowed environment/value forms
+- push/pop nesting is balanced
+
+## 4.7 `push_part_styles(widget_name, styles)` / `pop_part_styles()` / `validate_widget_part(name)` / `part_style_patch(name) -> Decl.StylePatch?`
+
+### Purpose
+Manage the currently active widget-call part-style map while elaborating a widget body.
+
+### Required behavior
+- install validated per-part style patches for one widget elaboration frame
+- reject unknown or duplicate part-style targets
+- `validate_widget_part(name)` must fail for undeclared parts
+- `part_style_patch(name)` must return the current patch for that part, if any
+
+### Must guarantee
+- part-style environments are stack-balanced
+- style patches are scoped to the current widget elaboration only
+- style-patch authored sugar does not survive beyond bind
+
+## 4.8 `resolve_intrinsic(fn, arity) -> string?`
 
 ### Purpose
 Resolve authored call syntax into canonical intrinsic names.
@@ -162,7 +209,7 @@ Resolve authored call syntax into canonical intrinsic names.
 - canonical names are stable
 - equivalent spellings do not diverge nondeterministically
 
-## 4.7 `alloc_node_id() -> number`
+## 4.9 `alloc_node_id() -> number`
 
 ### Purpose
 Allocate deterministic local node ids during binding.
@@ -171,7 +218,7 @@ Allocate deterministic local node ids during binding.
 - allocate in stable preorder or author traversal order
 - never reuse inside one component bind pass
 
-## 4.8 `push_path(base, local_id)` / `pop_path()` / `path_string() -> string`
+## 4.10 `push_path(base, local_id)` / `pop_path()` / `path_string() -> string`
 
 ### Purpose
 Track deterministic structural path context while binding nested nodes.
@@ -183,17 +230,20 @@ This supports generation of stable auto ids and debug-friendly structural identi
 - push/pop nesting is balanced
 - `path_string()` is deterministic for equal authored structure
 
-## 4.9 BindCtx invariants
+## 4.11 BindCtx invariants
 
 1. param/state slot allocation is stable
 2. widget definitions are uniquely named within one component bind pass
-3. widget prop/slot environments are stack-balanced during elaboration
-4. path bookkeeping is balanced
-5. intrinsic resolution is canonical
-6. theme resolution removes author-time sugar
-7. local node ids are unique per component bind pass
-8. widget-instance ids are deterministic per component bind pass
-9. widget-local stable ids are namespaced deterministically
+3. theme definitions are uniquely named within one component bind pass
+4. widget prop/slot environments are stack-balanced during elaboration
+5. theme-scope environments are stack-balanced during elaboration
+6. part-style environments are stack-balanced during elaboration
+7. path bookkeeping is balanced
+8. intrinsic resolution is canonical
+9. token/theme resolution removes author-time sugar
+10. local node ids are unique per component bind pass
+11. widget-instance ids are deterministic per component bind pass
+12. widget-local stable ids are namespaced deterministically
 
 ## 5. PlanCtx
 

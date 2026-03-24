@@ -24,6 +24,7 @@ module Decl {
         string name,
         Decl.Param* params,
         Decl.StateSlot* state,
+        Decl.ThemeDef* themes,
         Decl.WidgetDef* widgets,
         Decl.Node root
     ) unique
@@ -58,11 +59,34 @@ module Decl {
         | TVec2
         | TAny
 
+    ThemeDef = (
+        string name,
+        string? parent,
+        Decl.ThemeToken* tokens
+    )
+
+    ThemeToken = (
+        string name,
+        Decl.ValueType ty,
+        Decl.Expr value
+    )
+
+    ThemeOverride = (
+        string name,
+        Decl.Expr value
+    )
+
+    ThemeScope = (
+        string? base_theme,
+        Decl.ThemeOverride* overrides
+    )
+
     WidgetDef = (
         string name,
         Decl.WidgetProp* props,
         Decl.StateSlot* state,
         Decl.WidgetSlot* slots,
+        Decl.WidgetPart* parts,
         Decl.Node root
     )
 
@@ -76,13 +100,35 @@ module Decl {
         string name
     )
 
+    WidgetPart = (
+        string name
+    )
+
+    StylePatch = (
+        Decl.Expr? background,
+        Decl.Border? border,
+        Decl.CornerRadius? radius,
+        Decl.Expr? opacity,
+        Decl.Expr? text_color,
+        Decl.Expr? font_id,
+        Decl.Expr? font_size,
+        Decl.Expr? letter_spacing,
+        Decl.Expr? line_height,
+        Decl.WrapMode? wrap,
+        Decl.TextAlign? text_align,
+        Decl.Expr? image_tint
+    )
+
     Node = (
         Decl.Id id,
+        string? part,
+        Decl.ThemeScope? theme_scope,
         Decl.Visibility visibility,
         Decl.Layout layout,
         Decl.Decor decor,
         Decl.Clip? clip,
         Decl.Scroll? scroll,
+        Decl.ScrollControl? scroll_control,
         Decl.Floating? floating,
         Decl.Input input,
         Decl.Expr? aspect_ratio,
@@ -107,12 +153,18 @@ module Decl {
         Decl.Id? id,
         string name,
         Decl.PropArg* props,
+        Decl.PartStyleArg* styles,
         Decl.SlotArg* slots
     )
 
     PropArg = (
         string name,
         Decl.Expr value
+    )
+
+    PartStyleArg = (
+        string name,
+        Decl.StylePatch patch
     )
 
     SlotArg = (
@@ -210,6 +262,34 @@ module Decl {
     )
     methods {
         bind(BindCtx ctx) -> Bound.Scroll
+    }
+
+    ScrollAxis = ScrollAxisX | ScrollAxisY
+
+    ScrollMetricKind
+        = ScrollOffsetX
+        | ScrollOffsetY
+        | ScrollViewportW
+        | ScrollViewportH
+        | ScrollContentW
+        | ScrollContentH
+        | ScrollMaxX
+        | ScrollMaxY
+        | ScrollNeedX
+        | ScrollNeedY
+
+    ScrollControlKind
+        = ScrollThumbKind
+        | ScrollPageDecKind
+        | ScrollPageIncKind
+
+    ScrollControl = (
+        Decl.Id target,
+        Decl.ScrollAxis axis,
+        Decl.ScrollControlKind kind
+    )
+    methods {
+        bind(BindCtx ctx) -> Bound.ScrollControl
     }
 
     Floating = (
@@ -316,8 +396,9 @@ module Decl {
         | ParamRef(string name)
         | StateRef(string name)
         | WidgetPropRef(string name)
-        | ThemeRef(string name)
+        | TokenRef(string name)
         | EnvRef(string name)
+        | ScrollMetric(Decl.Id id, Decl.ScrollMetricKind metric)
         | Unary(string op, Decl.Expr rhs)
         | Binary(string op, Decl.Expr lhs, Decl.Expr rhs)
         | Select(Decl.Expr cond, Decl.Expr yes, Decl.Expr no)
@@ -368,6 +449,7 @@ module Bound {
         Bound.Decor decor,
         Bound.Clip? clip,
         Bound.Scroll? scroll,
+        Bound.ScrollControl? scroll_control,
         Bound.Floating? floating,
         Bound.Input input,
         Bound.Value? aspect_ratio,
@@ -453,6 +535,15 @@ module Bound {
         plan(PlanCtx ctx, number node_index) -> number
     }
 
+    ScrollControl = (
+        Bound.ResolvedId target,
+        Decl.ScrollAxis axis,
+        Decl.ScrollControlKind kind
+    )
+    methods {
+        plan(PlanCtx ctx, number node_index) -> number
+    }
+
     Floating = (
         Bound.FloatTarget target,
         Decl.AttachPoint element_point,
@@ -521,6 +612,7 @@ module Bound {
         | ParamSlot(number slot)
         | StateSlot(number slot)
         | EnvSlot(string name)
+        | ScrollMetric(Bound.ResolvedId id, Decl.ScrollMetricKind metric)
         | Unary(string op, Bound.Value rhs)
         | Binary(string op, Bound.Value lhs, Bound.Value rhs)
         | Select(Bound.Value cond, Bound.Value yes, Bound.Value no)
@@ -539,6 +631,7 @@ module Plan {
         Plan.InputSpec* inputs,
         Plan.ClipSpec* clips,
         Plan.ScrollSpec* scrolls,
+        Plan.ScrollControlSpec* scroll_controls,
         Plan.TextSpec* texts,
         Plan.ImageSpec* images,
         Plan.CustomSpec* customs,
@@ -572,6 +665,7 @@ module Plan {
         number input_slot,
         number? clip_slot,
         number? scroll_slot,
+        number? scroll_control_slot,
         number? text_slot,
         number? image_slot,
         number? custom_slot,
@@ -657,6 +751,16 @@ module Plan {
         compile_input(CompileCtx ctx) -> TerraQuote
     }
 
+    ScrollControlSpec = (
+        number node_index,
+        number target_node_index,
+        Decl.ScrollAxis axis,
+        Decl.ScrollControlKind kind
+    )
+    methods {
+        compile_input(CompileCtx ctx) -> TerraQuote
+    }
+
     TextSpec = (
         number node_index,
         Plan.Binding content,
@@ -724,6 +828,7 @@ module Plan {
         | Param(number slot)
         | State(number slot)
         | Env(string name)
+        | ScrollMetric(number node_index, Decl.ScrollMetricKind metric)
         | Expr(string op, Plan.Binding* args)
     methods {
         compile_bool(CompileCtx ctx) -> TerraQuote

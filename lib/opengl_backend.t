@@ -17,11 +17,11 @@ end
 
 local function scissor_to_gl(rect, viewport_h)
     if rect == nil then return nil end
-    local x = rect.x0
-    local y = viewport_h - rect.y1
-    local w = rect.x1 - rect.x0
-    local h = rect.y1 - rect.y0
-    return { x = x, y = y, w = w, h = h }
+    local x0 = math.floor(rect.x0)
+    local x1 = math.ceil(rect.x1)
+    local y0 = math.floor(viewport_h - rect.y1)
+    local y1 = math.ceil(viewport_h - rect.y0)
+    return { x = x0, y = y0, w = x1 - x0, h = y1 - y0 }
 end
 
 M.scissor_to_gl = scissor_to_gl

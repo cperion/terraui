@@ -1,5 +1,5 @@
 module Decl {
-    Component = (string name, Param* params, StateSlot* state, WidgetDef* widgets, Node root) unique
+    Component = (string name, Param* params, StateSlot* state, ThemeDef* themes, WidgetDef* widgets, Node root) unique
 
     Param = (string name, ValueType ty, Expr? default)
 
@@ -13,13 +13,25 @@ module Decl {
          | TVec2
          | TAny
 
-    WidgetDef = (string name, WidgetProp* props, StateSlot* state, WidgetSlot* slots, Node root)
+    ThemeDef = (string name, string? parent, ThemeToken* tokens)
+
+    ThemeToken = (string name, ValueType ty, Expr value)
+
+    ThemeOverride = (string name, Expr value)
+
+    ThemeScope = (string? base_theme, ThemeOverride* overrides)
+
+    WidgetDef = (string name, WidgetProp* props, StateSlot* state, WidgetSlot* slots, WidgetPart* parts, Node root)
 
     WidgetProp = (string name, ValueType ty, Expr? default)
 
     WidgetSlot = (string name)
 
-    Node = (Id id, Visibility visibility, Layout layout, Decor decor, Clip? clip, Scroll? scroll, ScrollControl? scroll_control, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Child* children)
+    WidgetPart = (string name)
+
+    StylePatch = (Expr? background, Border? border, CornerRadius? radius, Expr? opacity, Expr? text_color, Expr? font_id, Expr? font_size, Expr? letter_spacing, Expr? line_height, WrapMode? wrap, TextAlign? text_align, Expr? image_tint)
+
+    Node = (Id id, string? part, ThemeScope? theme_scope, Visibility visibility, Layout layout, Decor decor, Clip? clip, Scroll? scroll, ScrollControl? scroll_control, Floating? floating, Input input, Expr? aspect_ratio, Leaf? leaf, Child* children)
 
     Id = Auto
          | Stable(string name)
@@ -29,9 +41,11 @@ module Decl {
          | WidgetChild(WidgetCall value)
          | SlotRef(string name)
 
-    WidgetCall = (Id? id, string name, PropArg* props, SlotArg* slots)
+    WidgetCall = (Id? id, string name, PropArg* props, PartStyleArg* styles, SlotArg* slots)
 
     PropArg = (string name, Expr value)
+
+    PartStyleArg = (string name, StylePatch patch)
 
     SlotArg = (string name, Child* children)
 
@@ -139,7 +153,7 @@ module Decl {
          | ParamRef(string name)
          | StateRef(string name)
          | WidgetPropRef(string name)
-         | ThemeRef(string name)
+         | TokenRef(string name)
          | EnvRef(string name)
          | ScrollMetric(Id id, ScrollMetricKind metric)
          | Unary(string op, Expr rhs)

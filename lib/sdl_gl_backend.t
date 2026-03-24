@@ -275,8 +275,11 @@ local new_backend = terralib.memoize(function(font_path)
             C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_MIN_FILTER, C.GL_NEAREST)
             C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_MAG_FILTER, C.GL_NEAREST)
         end
-        C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_S, C.GL_CLAMP)
-        C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_T, C.GL_CLAMP)
+        -- Textures are sampled with GL_LINEAR. Clamp-to-edge avoids edge
+        -- bleed against the implicit border color, which can shave a pixel
+        -- off glyph tops/edges on tightly packed text surfaces.
+        C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_S, C.GL_CLAMP_TO_EDGE)
+        C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_T, C.GL_CLAMP_TO_EDGE)
         C.glTexImage2D(C.GL_TEXTURE_2D, 0, C.GL_RGBA, width, height, 0, C.GL_RGBA, C.GL_UNSIGNED_BYTE, pixels)
         return tex
     end
@@ -413,7 +416,9 @@ local new_backend = terralib.memoize(function(font_path)
             end
         end
 
-        draw_textured_quad(tex, draw_x, cmd.y, [float](w), [float](h), color(1.0f, 1.0f, 1.0f, 1.0f))
+        draw_x = C.floorf(draw_x)
+        var draw_y = C.floorf(cmd.y)
+        draw_textured_quad(tex, draw_x, draw_y, [float](w), [float](h), color(1.0f, 1.0f, 1.0f, 1.0f))
     end
 
     terra packet_before(a: Packet, b: Packet) : bool
@@ -663,10 +668,14 @@ local new_backend = terralib.memoize(function(font_path)
                 if p.kind == 5 then
                     var cmd = frame.scissors[p.index]
                     if cmd.is_begin then
-                        scissor_stack[scissor_count].x = [int32](cmd.x0)
-                        scissor_stack[scissor_count].y = [int32](frame.viewport_h - cmd.y1)
-                        scissor_stack[scissor_count].w = [int32](cmd.x1 - cmd.x0)
-                        scissor_stack[scissor_count].h = [int32](cmd.y1 - cmd.y0)
+                        var x0 = [int32](C.floorf(cmd.x0))
+                        var x1 = [int32](C.ceilf(cmd.x1))
+                        var y0 = [int32](C.floorf(frame.viewport_h - cmd.y1))
+                        var y1 = [int32](C.ceilf(frame.viewport_h - cmd.y0))
+                        scissor_stack[scissor_count].x = x0
+                        scissor_stack[scissor_count].y = y0
+                        scissor_stack[scissor_count].w = x1 - x0
+                        scissor_stack[scissor_count].h = y1 - y0
                         scissor_count = scissor_count + 1
                         apply_scissor(true, scissor_stack[scissor_count - 1])
                     else
@@ -695,8 +704,11 @@ local new_backend = terralib.memoize(function(font_path)
                 var z: ScissorRect
                 apply_scissor(false, z)
             end
-            C.SDL_GL_SwapWindow(session.window)
         end
+    end
+
+    local swap_window = terra(session: &Session)
+        C.SDL_GL_SwapWindow(session.window)
     end
 
     return {
@@ -710,10 +722,12 @@ local new_backend = terralib.memoize(function(font_path)
         gl_line_rect = gl_line_rect,
         upload_texture_rgba = upload_texture_rgba,
         draw_textured_quad = draw_textured_quad,
+        draw_text = draw_text,
         init = init,
         shutdown = shutdown,
         pump_input = pump_input,
         make_replay = make_replay,
+        swap_window = swap_window,
     }
 end)
 

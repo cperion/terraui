@@ -34,6 +34,9 @@ function BindCtx.new(opts)
         _state_slots       = {},
         _state_types       = {},
         _widget_defs       = {},
+        _theme_defs        = {},
+        _theme_stack       = {},
+        _part_style_stack  = {},
         _bound_widget_state = nil,
         _next_param        = 0,
         _next_state        = 0,
@@ -123,6 +126,19 @@ function BindCtx:widget_def(name)
     return def
 end
 
+function BindCtx:register_theme(def)
+    if self._theme_defs[def.name] ~= nil then
+        error("duplicate theme name: " .. def.name)
+    end
+    self._theme_defs[def.name] = def
+end
+
+function BindCtx:theme_def(name)
+    local def = self._theme_defs[name]
+    if def == nil then error("unknown theme: " .. tostring(name)) end
+    return def
+end
+
 function BindCtx:current_widget_frame()
     return self._widget_frames[#self._widget_frames]
 end
@@ -133,6 +149,42 @@ end
 
 function BindCtx:pop_widget_frame()
     self._widget_frames[#self._widget_frames] = nil
+end
+
+function BindCtx:push_theme_scope(scope)
+    self._theme_stack[#self._theme_stack + 1] = scope
+end
+
+function BindCtx:pop_theme_scope()
+    self._theme_stack[#self._theme_stack] = nil
+end
+
+function BindCtx:push_part_styles(widget_name, part_defs, styles)
+    self._part_style_stack[#self._part_style_stack + 1] = {
+        widget_name = widget_name,
+        part_defs = part_defs,
+        styles = styles,
+    }
+end
+
+function BindCtx:pop_part_styles()
+    self._part_style_stack[#self._part_style_stack] = nil
+end
+
+function BindCtx:validate_widget_part(name)
+    local frame = self._part_style_stack[#self._part_style_stack]
+    if frame == nil then
+        error("widget part outside widget body: " .. tostring(name))
+    end
+    if frame.part_defs[name] == nil then
+        error("unknown widget part for " .. frame.widget_name .. ": " .. tostring(name))
+    end
+end
+
+function BindCtx:part_style_patch(name)
+    local frame = self._part_style_stack[#self._part_style_stack]
+    if frame == nil then return nil end
+    return frame.styles[name]
 end
 
 function BindCtx:push_override_id(id)
@@ -150,6 +202,43 @@ end
 function BindCtx:widget_scope_string()
     local frame = self:current_widget_frame()
     return frame and frame.scope or nil
+end
+
+local function theme_token_decl(ctx, theme_name, token_name, seen)
+    if theme_name == nil then return nil end
+    seen = seen or {}
+    local key = theme_name .. "\0" .. token_name
+    if seen[key] then return nil end
+    seen[key] = true
+
+    local def = ctx._theme_defs[theme_name]
+    if def == nil then
+        error("unknown theme: " .. tostring(theme_name))
+    end
+    for _, tok in ipairs(def.tokens) do
+        if tok.name == token_name then return tok end
+    end
+    if def.parent ~= nil then
+        return theme_token_decl(ctx, def.parent, token_name, seen)
+    end
+    return nil
+end
+
+function BindCtx:resolve_token(name)
+    for i = #self._theme_stack, 1, -1 do
+        local scope = self._theme_stack[i]
+        local override = scope.overrides and scope.overrides[name] or nil
+        if override ~= nil then
+            return override:bind(self)
+        end
+        if scope.base_theme ~= nil then
+            local tok = theme_token_decl(self, scope.base_theme, name)
+            if tok ~= nil then
+                return tok.value:bind(self)
+            end
+        end
+    end
+    return Bound.EnvSlot("token:" .. name)
 end
 
 function BindCtx:resolve_widget_prop(name)
@@ -354,6 +443,8 @@ local function infer_decl_expr_type(ctx, expr)
     elseif k == "WidgetPropRef" then
         local frame = ctx:current_widget_frame()
         return frame and frame.prop_types[expr.name] or nil
+    elseif k == "TokenRef" then
+        return ctx:token_type(expr.name)
     elseif k == "Unary" then
         local rhs = infer_decl_expr_type(ctx, expr.rhs)
         if expr.op == "not" and rhs == Decl.TBool then return Decl.TBool end
@@ -385,6 +476,21 @@ local function infer_decl_expr_type(ctx, expr)
     else
         return nil
     end
+end
+
+function BindCtx:token_type(name)
+    for i = #self._theme_stack, 1, -1 do
+        local scope = self._theme_stack[i]
+        local override = scope.overrides and scope.overrides[name] or nil
+        if override ~= nil then
+            return infer_decl_expr_type(self, override)
+        end
+        if scope.base_theme ~= nil then
+            local tok = theme_token_decl(self, scope.base_theme, name)
+            if tok ~= nil then return tok.ty end
+        end
+    end
+    return nil
 end
 
 local function assert_expr_type_compatible(ctx, expr, expected, label)
@@ -434,9 +540,8 @@ function Decl.WidgetPropRef:bind(ctx)
     return ctx:resolve_widget_prop(self.name)
 end
 
-function Decl.ThemeRef:bind(ctx)
-    -- v1: theme refs become env slots with a prefix
-    return Bound.EnvSlot("theme:" .. self.name)
+function Decl.TokenRef:bind(ctx)
+    return ctx:resolve_token(self.name)
 end
 
 function Decl.EnvRef:bind(ctx)
@@ -657,6 +762,112 @@ function Decl.Input:bind(ctx)
         self.action)
 end
 
+local function bind_border_with_patch(border, patch, ctx)
+    local p = patch and patch.border or nil
+    local src = p or border
+    if src == nil then return nil end
+    return Bound.Border(
+        src.left:bind(ctx),
+        src.top:bind(ctx),
+        src.right:bind(ctx),
+        src.bottom:bind(ctx),
+        src.between_children:bind(ctx),
+        src.color:bind(ctx))
+end
+
+local function bind_radius_with_patch(radius, patch, ctx)
+    local p = patch and patch.radius or nil
+    local src = p or radius
+    if src == nil then return nil end
+    return Bound.CornerRadius(
+        src.top_left:bind(ctx),
+        src.top_right:bind(ctx),
+        src.bottom_right:bind(ctx),
+        src.bottom_left:bind(ctx))
+end
+
+local function bind_decor_with_patch(decor, patch, ctx)
+    local background = decor.background
+    local opacity = decor.opacity
+    if patch ~= nil then
+        if patch.background ~= nil then background = patch.background end
+        if patch.opacity ~= nil then opacity = patch.opacity end
+    end
+    return Bound.Decor(
+        background and background:bind(ctx) or nil,
+        bind_border_with_patch(decor.border, patch, ctx),
+        bind_radius_with_patch(decor.radius, patch, ctx),
+        opacity and opacity:bind(ctx) or nil)
+end
+
+local function bind_text_style_with_patch(style, patch, ctx)
+    local color = style.color
+    local font_id = style.font_id
+    local font_size = style.font_size
+    local letter_spacing = style.letter_spacing
+    local line_height = style.line_height
+    local wrap = style.wrap
+    local align = style.align
+    if patch ~= nil then
+        if patch.text_color ~= nil then color = patch.text_color end
+        if patch.font_id ~= nil then font_id = patch.font_id end
+        if patch.font_size ~= nil then font_size = patch.font_size end
+        if patch.letter_spacing ~= nil then letter_spacing = patch.letter_spacing end
+        if patch.line_height ~= nil then line_height = patch.line_height end
+        if patch.wrap ~= nil then wrap = patch.wrap end
+        if patch.text_align ~= nil then align = patch.text_align end
+    end
+    return Bound.TextStyle(
+        color:bind(ctx),
+        font_id:bind(ctx),
+        font_size:bind(ctx),
+        letter_spacing:bind(ctx),
+        line_height:bind(ctx),
+        wrap,
+        align)
+end
+
+local function bind_leaf_with_patch(leaf, patch, ctx)
+    if leaf == nil then return nil end
+    if leaf.kind == "Text" then
+        local tl = leaf.value
+        return Bound.Text(Bound.TextLeaf(
+            tl.content:bind(ctx),
+            bind_text_style_with_patch(tl.style, patch, ctx)))
+    elseif leaf.kind == "Image" then
+        local il = leaf.value
+        local tint = il.tint
+        if patch ~= nil and patch.image_tint ~= nil then tint = patch.image_tint end
+        return Bound.Image(Bound.ImageLeaf(
+            il.image_id:bind(ctx),
+            tint:bind(ctx),
+            il.fit))
+    elseif leaf.kind == "Custom" then
+        return leaf:bind(ctx)
+    end
+    error("unknown Decl.Leaf kind: " .. tostring(leaf.kind))
+end
+
+local function push_decl_theme_scope(ctx, scope)
+    local overrides = {}
+    if scope ~= nil then
+        for _, ov in ipairs(scope.overrides) do
+            overrides[ov.name] = ov.value
+            if scope.base_theme ~= nil then
+                local tok = theme_token_decl(ctx, scope.base_theme, ov.name)
+                if tok ~= nil then
+                    assert_expr_type_compatible(ctx, ov.value, tok.ty,
+                        "theme override type mismatch for token " .. ov.name)
+                end
+            end
+        end
+    end
+    ctx:push_theme_scope({
+        base_theme = scope and scope.base_theme or nil,
+        overrides = overrides,
+    })
+end
+
 ---------------------------------------------------------------------------
 -- Child/widget elaboration helpers
 ---------------------------------------------------------------------------
@@ -667,7 +878,14 @@ local function bind_children(ctx, decl_children)
         if child.kind == "NodeChild" then
             out:insert(child.value:bind(ctx))
         elseif child.kind == "WidgetChild" then
+            local theme_scope = rawget(child.value, "_terraui_theme_scope")
+            if theme_scope ~= nil then
+                push_decl_theme_scope(ctx, theme_scope)
+            end
             out:insert(ctx:bind_widget_call(child.value))
+            if theme_scope ~= nil then
+                ctx:pop_theme_scope()
+            end
         elseif child.kind == "SlotRef" then
             local slot_children = ctx:resolve_slot_children(child.name)
             local bound = bind_children(ctx, slot_children)
@@ -713,6 +931,14 @@ function BindCtx:bind_widget_call(call)
         state_defs[s.name] = s
     end
 
+    local part_defs = {}
+    for _, p in ipairs(def.parts) do
+        if part_defs[p.name] ~= nil then
+            error("duplicate widget part in def " .. def.name .. ": " .. p.name)
+        end
+        part_defs[p.name] = true
+    end
+
     local props = {}
     for _, arg in ipairs(call.props) do
         if props[arg.name] ~= nil then
@@ -735,6 +961,17 @@ function BindCtx:bind_widget_call(call)
                 error("missing widget prop for " .. call.name .. ": " .. name)
             end
         end
+    end
+
+    local styles = {}
+    for _, arg in ipairs(call.styles) do
+        if styles[arg.name] ~= nil then
+            error("duplicate widget style arg for " .. call.name .. ": " .. arg.name)
+        end
+        if part_defs[arg.name] == nil then
+            error("unknown widget part for " .. call.name .. ": " .. arg.name)
+        end
+        styles[arg.name] = arg.patch
     end
 
     local slots = {}
@@ -784,6 +1021,7 @@ function BindCtx:bind_widget_call(call)
     }
 
     self:push_widget_frame(frame)
+    self:push_part_styles(call.name, part_defs, styles)
     for _, s in ipairs(def.state) do
         if s.initial ~= nil then
             assert_expr_type_compatible(self, s.initial, s.ty,
@@ -794,6 +1032,7 @@ function BindCtx:bind_widget_call(call)
             local_state_names[s.name], s.ty, local_state_slots[s.name], initial))
     end
     local bound = def.root:bind(self)
+    self:pop_part_styles()
     self:pop_widget_frame()
     return bound
 end
@@ -814,20 +1053,31 @@ function Decl.Node:bind(ctx)
     if id_mode == "key" then
         ctx:push_named_scope(stable_id)
     end
+    if self.theme_scope ~= nil then
+        push_decl_theme_scope(ctx, self.theme_scope)
+    end
+
+    local patch = nil
+    if self.part ~= nil then
+        ctx:validate_widget_part(self.part)
+        patch = ctx:part_style_patch(self.part)
+    end
 
     local visibility  = self.visibility:bind(ctx)
     local layout      = self.layout:bind(ctx)
-    local decor       = self.decor:bind(ctx)
+    local decor       = bind_decor_with_patch(self.decor, patch, ctx)
     local clip        = self.clip and self.clip:bind(ctx) or nil
     local scroll      = self.scroll and self.scroll:bind(ctx) or nil
     local scroll_control = self.scroll_control and self.scroll_control:bind(ctx) or nil
     local floating    = self.floating and self.floating:bind(ctx) or nil
     local input       = self.input:bind(ctx)
-    local aspect_ratio = self.aspect_ratio
-                         and self.aspect_ratio:bind(ctx) or nil
-    local leaf        = self.leaf and self.leaf:bind(ctx) or nil
+    local aspect_ratio = self.aspect_ratio and self.aspect_ratio:bind(ctx) or nil
+    local leaf        = bind_leaf_with_patch(self.leaf, patch, ctx)
     local children    = bind_children(ctx, self.children)
 
+    if self.theme_scope ~= nil then
+        ctx:pop_theme_scope()
+    end
     if id_mode == "key" then
         ctx:pop_named_scope()
     end
@@ -869,7 +1119,35 @@ function Decl.Component:bind(ctx)
     ctx._bound_widget_state = List()
     for _, p in ipairs(self.params) do ctx:register_param(p.name, p.ty) end
     for _, s in ipairs(self.state) do ctx:register_state(s.name, s.ty) end
+    for _, t in ipairs(self.themes) do ctx:register_theme(t) end
     for _, w in ipairs(self.widgets) do ctx:register_widget(w) end
+
+    for _, t in ipairs(self.themes) do
+        local seen = {}
+        for _, tok in ipairs(t.tokens) do
+            if seen[tok.name] then
+                error("duplicate theme token in theme " .. t.name .. ": " .. tok.name)
+            end
+            seen[tok.name] = true
+            assert_expr_type_compatible(ctx, tok.value, tok.ty,
+                "theme token type mismatch for " .. t.name .. ": " .. tok.name)
+        end
+        if t.parent ~= nil then
+            local walk = t.parent
+            local cycle_seen = { [t.name] = true }
+            while walk ~= nil do
+                if cycle_seen[walk] then
+                    error("cyclic theme parent chain involving: " .. t.name)
+                end
+                cycle_seen[walk] = true
+                local parent = ctx._theme_defs[walk]
+                if parent == nil then
+                    error("unknown parent theme for " .. t.name .. ": " .. walk)
+                end
+                walk = parent.parent
+            end
+        end
+    end
 
     local bound_params = List()
     for _, p in ipairs(self.params) do

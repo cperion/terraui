@@ -43,6 +43,18 @@ local function is_decl_widget_def(v)
     return type(v) == "table" and Decl.WidgetDef:isclassof(v)
 end
 
+local function is_decl_theme_def(v)
+    return type(v) == "table" and Decl.ThemeDef:isclassof(v)
+end
+
+local function is_decl_style_patch(v)
+    return type(v) == "table" and Decl.StylePatch:isclassof(v)
+end
+
+local function is_decl_theme_scope(v)
+    return type(v) == "table" and Decl.ThemeScope:isclassof(v)
+end
+
 local function is_scope(v)
     return type(v) == "table" and rawget(v, "__terraui_scope") == true
 end
@@ -193,6 +205,48 @@ local function normalize_floating(props)
     return nil
 end
 
+local function normalize_theme_scope(props)
+    if props.theme_scope and is_decl_theme_scope(props.theme_scope) then
+        return props.theme_scope
+    end
+    if props.theme ~= nil or props.theme_overrides ~= nil then
+        local overrides = List()
+        local names = {}
+        for name, _ in pairs(props.theme_overrides or {}) do
+            names[#names + 1] = name
+        end
+        table.sort(names)
+        for _, name in ipairs(names) do
+            overrides:insert(Decl.ThemeOverride(name, M.as_expr((props.theme_overrides or {})[name])))
+        end
+        local base_theme = props.theme
+        if type(base_theme) ~= "string" and base_theme ~= nil then
+            error("theme name must be a string")
+        end
+        return Decl.ThemeScope(base_theme, overrides)
+    end
+    return nil
+end
+
+local function normalize_style_patch(spec)
+    if spec == nil then return nil end
+    if is_decl_style_patch(spec) then return spec end
+    assert(type(spec) == "table", "style patch must be a table")
+    return Decl.StylePatch(
+        spec.background and M.as_expr(spec.background) or nil,
+        spec.border,
+        spec.radius,
+        spec.opacity and M.as_expr(spec.opacity) or nil,
+        spec.text_color and M.as_expr(spec.text_color) or nil,
+        spec.font_id and M.as_expr(spec.font_id) or nil,
+        spec.font_size and M.as_expr(spec.font_size) or nil,
+        spec.letter_spacing and M.as_expr(spec.letter_spacing) or nil,
+        spec.line_height and M.as_expr(spec.line_height) or nil,
+        spec.wrap,
+        spec.text_align,
+        spec.image_tint and M.as_expr(spec.image_tint) or nil)
+end
+
 local function text_style(props)
     return Decl.TextStyle(
         M.as_expr(props.color or props.text_color or Decl.ColorLit(1,1,1,1)),
@@ -292,9 +346,11 @@ local function widget_fields(def)
     if def == nil then return nil end
     local props = {}
     local slots = {}
+    local parts = {}
     for _, p in ipairs(def.props) do props[p.name] = p end
     for _, s in ipairs(def.slots) do slots[s.name] = true end
-    return props, slots
+    for _, p in ipairs(def.parts) do parts[p.name] = true end
+    return props, slots, parts
 end
 
 local function type_name(ty)
@@ -361,10 +417,10 @@ local function validate_widget_props(def, props)
     if def == nil then return end
     local prop_defs = widget_fields(def)
     for k, v in pairs(props) do
-        if k ~= "key" and k ~= "slots" and prop_defs[k] == nil then
+        if k ~= "key" and k ~= "slots" and k ~= "styles" and prop_defs[k] == nil then
             error("unknown widget prop in DSL for " .. def.name .. ": " .. tostring(k))
         end
-        if k ~= "key" and k ~= "slots" and prop_defs[k] ~= nil then
+        if k ~= "key" and k ~= "slots" and k ~= "styles" and prop_defs[k] ~= nil then
             local expr = M.as_expr(v)
             local got = static_expr_type(expr)
             local expected = prop_defs[k].ty
@@ -377,6 +433,17 @@ local function validate_widget_props(def, props)
         if props[name] == nil and p.default == nil then
             error("missing required widget prop in DSL for " .. def.name .. ": " .. name)
         end
+    end
+end
+
+local function validate_widget_styles(def, styles)
+    if def == nil or styles == nil then return end
+    local _, _, part_defs = widget_fields(def)
+    for name, patch in pairs(styles) do
+        if part_defs[name] == nil then
+            error("unknown widget part in DSL for " .. def.name .. ": " .. tostring(name))
+        end
+        normalize_style_patch(patch)
     end
 end
 
@@ -448,6 +515,8 @@ local function make_node(axis, props, leaf, children, defaults)
 
     local node = Decl.Node(
         node_id,
+        props.part,
+        normalize_theme_scope(props),
         no_vis(props),
         Decl.Layout(
             axis,
@@ -592,7 +661,21 @@ function M.dsl()
         if tr == nil then tr, br, bl = tl, tl, tl end
         return Decl.CornerRadius(M.as_expr(tl), M.as_expr(tr), M.as_expr(br), M.as_expr(bl))
     end
-    ui.theme = function(name) return Decl.ThemeRef(name) end
+    local token_ns = {}
+    setmetatable(token_ns, {
+        __call = function(_, name)
+            return Decl.TokenRef(name)
+        end,
+    })
+    token_ns.color = function(name) return Decl.TokenRef(name) end
+    token_ns.number = function(name) return Decl.TokenRef(name) end
+    token_ns.string = function(name) return Decl.TokenRef(name) end
+    token_ns.bool = function(name) return Decl.TokenRef(name) end
+    token_ns.image = function(name) return Decl.TokenRef(name) end
+    token_ns.vec2 = function(name) return Decl.TokenRef(name) end
+
+    ui.token = token_ns
+    ui.theme = function(name) return Decl.TokenRef(name) end
     ui.env = function(name) return Decl.EnvRef(name) end
     ui.param_ref = function(name) return Decl.ParamRef(name) end
     ui.state_ref = function(name) return Decl.StateRef(name) end
@@ -654,6 +737,19 @@ function M.dsl()
         end
     end
 
+    ui.theme_token = function(name, ty, value)
+        return Decl.ThemeToken(name, ty, M.as_expr(value))
+    end
+
+    ui.theme_def = function(name)
+        return function(spec)
+            spec = spec or {}
+            local tokens = List()
+            for _, t in ipairs(spec.tokens or {}) do tokens:insert(t) end
+            return Decl.ThemeDef(name, spec.parent, tokens)
+        end
+    end
+
     ui.widget_prop = function(name)
         return function(spec)
             spec = spec or {}
@@ -663,6 +759,53 @@ function M.dsl()
 
     ui.widget_slot = function(name)
         return Decl.WidgetSlot(name)
+    end
+
+    ui.widget_part = function(name)
+        return Decl.WidgetPart(name)
+    end
+
+    ui.style = function(spec)
+        return normalize_style_patch(spec or {})
+    end
+
+    ui.part = function(name, child)
+        assert(is_decl_node(child), "ui.part expects a Decl.Node")
+        child.part = name
+        return child
+    end
+
+    ui.with_theme = function(name, overrides)
+        local out = List()
+        local names = {}
+        for k, _ in pairs(overrides or {}) do names[#names + 1] = k end
+        table.sort(names)
+        for _, k in ipairs(names) do
+            out:insert(Decl.ThemeOverride(k, M.as_expr(overrides[k])))
+        end
+        local scope = Decl.ThemeScope(name, out)
+        return function(children)
+            local items = {}
+            if children == nil then
+                return ui.fragment {}
+            elseif is_decl_node(children) or is_decl_widget_call(children) or is_decl_child(children) then
+                items = { children }
+            elseif type(children) == "table" and children.__terraui_fragment then
+                items = children.children or {}
+            elseif type(children) == "table" then
+                items = children
+            else
+                error("ui.with_theme expects child or child list")
+            end
+            for _, child in ipairs(items) do
+                if is_decl_node(child) then
+                    child.theme_scope = scope
+                elseif is_decl_widget_call(child) then
+                    rawset(child, "_terraui_theme_scope", scope)
+                end
+            end
+            return ui.fragment(items)
+        end
     end
 
     ui.state = function(name)
@@ -681,9 +824,14 @@ function M.dsl()
             for _, s in ipairs(spec.state or {}) do state:insert(s) end
             local slots = List()
             for _, s in ipairs(spec.slots or {}) do slots:insert(s) end
+            local parts = List()
+            for _, p in ipairs(spec.parts or {}) do
+                assert(type(p) == "table" and Decl.WidgetPart:isclassof(p), "widget.parts entries must be Decl.WidgetPart")
+                parts:insert(p)
+            end
             assert(spec.root and is_decl_node(spec.root), "widget.root must be a Decl.Node")
 
-            local def = Decl.WidgetDef(name, props, state, slots, spec.root)
+            local def = Decl.WidgetDef(name, props, state, slots, parts, spec.root)
             if widget_registry[name] ~= nil and widget_registry[name] ~= def then
                 error("duplicate widget name in DSL environment: " .. name)
             end
@@ -710,19 +858,28 @@ function M.dsl()
         return function(props)
             props = props or {}
             validate_widget_props(def, props)
+            validate_widget_styles(def, props.styles)
             return function(children)
                 local slot_args = normalize_slot_args(props, children, def)
 
                 local prop_args = List()
                 local prop_names = {}
                 for k, _ in pairs(props) do
-                    if k ~= "key" and k ~= "slots" then prop_names[#prop_names + 1] = k end
+                    if k ~= "key" and k ~= "slots" and k ~= "styles" then prop_names[#prop_names + 1] = k end
                 end
                 table.sort(prop_names)
                 for _, k in ipairs(prop_names) do
                     prop_args:insert(Decl.PropArg(k, M.as_expr(props[k])))
                 end
-                return Decl.WidgetCall(props.key and normalize_id(props.key) or nil, name, prop_args, slot_args)
+
+                local style_args = List()
+                local style_names = {}
+                for k, _ in pairs(props.styles or {}) do style_names[#style_names + 1] = k end
+                table.sort(style_names)
+                for _, k in ipairs(style_names) do
+                    style_args:insert(Decl.PartStyleArg(k, normalize_style_patch(props.styles[k])))
+                end
+                return Decl.WidgetCall(props.key and normalize_id(props.key) or nil, name, prop_args, style_args, slot_args)
             end
         end
     end
@@ -734,13 +891,18 @@ function M.dsl()
             for _, p in ipairs(spec.params or {}) do params:insert(p) end
             local state = List()
             for _, s in ipairs(spec.state or {}) do state:insert(s) end
+            local themes = List()
+            for _, t in ipairs(spec.themes or {}) do
+                assert(is_decl_theme_def(t), "component.themes entries must be Decl.ThemeDef")
+                themes:insert(t)
+            end
             local widgets = List()
             for _, w in ipairs(spec.widgets or {}) do
                 assert(is_decl_widget_def(w), "component.widgets entries must be Decl.WidgetDef")
                 widgets:insert(w)
             end
             assert(spec.root and is_decl_node(spec.root), "component.root must be a Decl.Node")
-            return Decl.Component(name, params, state, widgets, spec.root)
+            return Decl.Component(name, params, state, themes, widgets, spec.root)
         end
     end
 

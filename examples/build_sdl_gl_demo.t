@@ -65,6 +65,8 @@ struct DemoApp {
     progress_b: float
     accent: compile.Color
     tick: int32
+    debug_mode: int32      -- 0=off, 1=bounds, 2=bounds+padding, 3=full
+    debug_hover: int32     -- node index under mouse (-1 for none)
 }
 
 local bound = bind.bind_component(decl, { text_backend = sdl.text_backend })
@@ -83,6 +85,7 @@ local max_scissors = #planned.clips
 if max_scissors < 1 then max_scissors = 1 end
 local node_count = #planned.nodes
 local debug_scroll_log_path = "/tmp/terraui-scroll-debug.log"
+local debug_geom_log_path = "/tmp/terraui-geom-debug.log"
 
 terra debug_scroll_input(frame: &Frame)
     var f = C.fopen([debug_scroll_log_path], "a")
@@ -101,7 +104,7 @@ end
 terra debug_scroll_state(frame: &Frame, label: rawstring)
     var f = C.fopen([debug_scroll_log_path], "a")
     if f == nil then return end
-    C.fprintf(f, "[scroll-debug] %s\n", label)
+    C.fprintf(f, "[scroll-debug] %s rects=%d borders=%d texts=%d scissors=%d\n", label, frame.rect_count, frame.border_count, frame.text_count, frame.scissor_count)
     for i = 0, [node_count - 1] do
         var max_x = frame.nodes[i].content_extent_w - frame.nodes[i].content_w
         var max_y = frame.nodes[i].content_extent_h - frame.nodes[i].content_h
@@ -122,6 +125,64 @@ terra debug_scroll_state(frame: &Frame, label: rawstring)
                 frame.nodes[i].scroll_x, frame.nodes[i].scroll_y,
                 max_x, max_y,
                 frame.nodes[i].visible, frame.nodes[i].enabled, in_rect, in_clip)
+        end
+    end
+    if C.strcmp(label, "after run") == 0 then
+        for i = 0, frame.border_count - 1 do
+            if frame.borders[i].y < 140.0f then
+                C.fprintf(f, "  border=%d rect=(%.1f, %.1f %.1f x %.1f) sides=(%.1f, %.1f, %.1f, %.1f) z=%.1f seq=%u\n",
+                    i,
+                    frame.borders[i].x, frame.borders[i].y, frame.borders[i].w, frame.borders[i].h,
+                    frame.borders[i].left, frame.borders[i].top, frame.borders[i].right, frame.borders[i].bottom,
+                    frame.borders[i].z, frame.borders[i].seq)
+            end
+        end
+        for i = 0, frame.text_count - 1 do
+            if frame.texts[i].y < 140.0f then
+                C.fprintf(f, "  text=%d rect=(%.1f, %.1f %.1f x %.1f) size=%.1f text=%s\n",
+                    i,
+                    frame.texts[i].x, frame.texts[i].y, frame.texts[i].w, frame.texts[i].h,
+                    frame.texts[i].font_size,
+                    terralib.select(frame.texts[i].text ~= nil, frame.texts[i].text, "<nil>"))
+            end
+        end
+    end
+    C.fflush(f)
+    C.fclose(f)
+end
+
+terra debug_geom_state(frame: &Frame, label: rawstring)
+    var f = C.fopen([debug_scroll_log_path], "a")
+    if f == nil then return end
+    C.fprintf(f, "[geom-debug] %s viewport=(%.1f x %.1f) rects=%d borders=%d texts=%d scissors=%d\n",
+        label, frame.viewport_w, frame.viewport_h, frame.rect_count, frame.border_count, frame.text_count, frame.scissor_count)
+    for i = 0, [node_count - 1] do
+        if frame.nodes[i].x < frame.viewport_w and frame.nodes[i].y < frame.viewport_h and frame.nodes[i].w > 0.0f and frame.nodes[i].h > 0.0f then
+            if frame.nodes[i].y < 220.0f or frame.nodes[i].x > 900.0f then
+                C.fprintf(f, "  node=%d rect=(%.1f, %.1f %.1f x %.1f) content=(%.1f, %.1f %.1f x %.1f) clip=(%.1f, %.1f -> %.1f, %.1f)\n",
+                    i,
+                    frame.nodes[i].x, frame.nodes[i].y, frame.nodes[i].w, frame.nodes[i].h,
+                    frame.nodes[i].content_x, frame.nodes[i].content_y, frame.nodes[i].content_w, frame.nodes[i].content_h,
+                    frame.nodes[i].clip_x0, frame.nodes[i].clip_y0, frame.nodes[i].clip_x1, frame.nodes[i].clip_y1)
+            end
+        end
+    end
+    for i = 0, frame.border_count - 1 do
+        if frame.borders[i].y < 220.0f or frame.borders[i].x > 900.0f then
+            C.fprintf(f, "  border=%d rect=(%.1f, %.1f %.1f x %.1f) sides=(%.1f, %.1f, %.1f, %.1f) z=%.1f seq=%u\n",
+                i,
+                frame.borders[i].x, frame.borders[i].y, frame.borders[i].w, frame.borders[i].h,
+                frame.borders[i].left, frame.borders[i].top, frame.borders[i].right, frame.borders[i].bottom,
+                frame.borders[i].z, frame.borders[i].seq)
+        end
+    end
+    for i = 0, frame.text_count - 1 do
+        if frame.texts[i].y < 220.0f or frame.texts[i].x > 900.0f then
+            C.fprintf(f, "  text=%d rect=(%.1f, %.1f %.1f x %.1f) size=%.1f wrap=%d align=%d text=%s\n",
+                i,
+                frame.texts[i].x, frame.texts[i].y, frame.texts[i].w, frame.texts[i].h,
+                frame.texts[i].font_size, frame.texts[i].wrap, frame.texts[i].align,
+                terralib.select(frame.texts[i].text ~= nil, frame.texts[i].text, "<nil>"))
         end
     end
     C.fflush(f)
@@ -488,7 +549,72 @@ terra app_shutdown(app: &DemoApp)
 end
 
 terra pump_input(app: &DemoApp, frame: &Frame, quit: &bool)
-    sdl.pump_input(&app.backend, &frame.input, &frame.viewport_w, &frame.viewport_h, quit)
+    frame.input.mouse_pressed = false
+    frame.input.mouse_released = false
+    frame.input.wheel_dx = 0.0f
+    frame.input.wheel_dy = 0.0f
+
+    var have_mouse_pos = false
+    var event_mouse_x: float = frame.input.mouse_x
+    var event_mouse_y: float = frame.input.mouse_y
+
+    var ev: C.SDL_Event
+    while C.SDL_PollEvent(&ev) do
+        if ev.type == C.SDL_EVENT_QUIT or ev.type == C.SDL_EVENT_WINDOW_CLOSE_REQUESTED then
+            @quit = true
+        elseif ev.type == C.SDL_EVENT_KEY_DOWN then
+            if ev.key.key == C.SDLK_D then
+                app.debug_mode = (app.debug_mode + 1) % 4
+            elseif ev.key.key == C.SDLK_ESCAPE then
+                @quit = true
+            end
+        elseif ev.type == C.SDL_EVENT_MOUSE_MOTION then
+            event_mouse_x = ev.motion.x
+            event_mouse_y = ev.motion.y
+            have_mouse_pos = true
+        elseif ev.type == C.SDL_EVENT_MOUSE_BUTTON_DOWN and ev.button.button == 1 then
+            frame.input.mouse_down = true
+            frame.input.mouse_pressed = true
+            event_mouse_x = ev.button.x
+            event_mouse_y = ev.button.y
+            have_mouse_pos = true
+        elseif ev.type == C.SDL_EVENT_MOUSE_BUTTON_UP and ev.button.button == 1 then
+            frame.input.mouse_down = false
+            frame.input.mouse_released = true
+            event_mouse_x = ev.button.x
+            event_mouse_y = ev.button.y
+            have_mouse_pos = true
+        elseif ev.type == C.SDL_EVENT_MOUSE_WHEEL then
+            var wx = ev.wheel.x
+            var wy = ev.wheel.y
+            if ev.wheel.integer_x ~= 0 then wx = [float](ev.wheel.integer_x) end
+            if ev.wheel.integer_y ~= 0 then wy = [float](ev.wheel.integer_y) end
+            if ev.wheel.direction == C.SDL_MOUSEWHEEL_FLIPPED then
+                wx = -wx
+                wy = -wy
+            end
+            frame.input.wheel_dx = frame.input.wheel_dx + wx
+            frame.input.wheel_dy = frame.input.wheel_dy + wy
+            event_mouse_x = ev.wheel.mouse_x
+            event_mouse_y = ev.wheel.mouse_y
+            have_mouse_pos = true
+        end
+    end
+
+    if have_mouse_pos then
+        frame.input.mouse_x = event_mouse_x
+        frame.input.mouse_y = event_mouse_y
+    else
+        var mx: float, my: float
+        C.SDL_GetMouseState(&mx, &my)
+        frame.input.mouse_x = mx
+        frame.input.mouse_y = my
+    end
+
+    var vw: int, vh: int
+    C.SDL_GetWindowSizeInPixels(app.backend.window, &vw, &vh)
+    frame.viewport_w = [float](vw)
+    frame.viewport_h = [float](vh)
 end
 
 terra sync_params(frame: &Frame, app: &DemoApp)
@@ -520,6 +646,372 @@ terra sync_params(frame: &Frame, app: &DemoApp)
 end
 
 local replay = sdl.make_replay(Frame, max_packets, max_scissors, DemoApp, draw_image, draw_custom)
+
+---------------------------------------------------------------------------
+-- Debug overlay  (toggled by D key, cycles: off → bounds → +padding → +info)
+---------------------------------------------------------------------------
+
+-- Compile-time metadata per node
+local DebugNodeMeta = struct {
+    label: rawstring        -- short human-readable name
+    axis: int32             -- 0=row, 1=column
+    has_clip: bool
+    has_scroll: bool
+    has_float: bool
+    has_text: bool
+    depth: int32            -- nesting depth for color cycling
+}
+
+-- Build the metadata table at compile time
+local debug_meta_values = {}
+do
+    -- Compute depth for each node
+    local depth_map = {}
+    for i, node in ipairs(planned.nodes) do
+        if node.parent == nil then
+            depth_map[node.index] = 0
+        else
+            depth_map[node.index] = (depth_map[node.parent] or 0) + 1
+        end
+    end
+
+    local labels = planned._stable_id_labels or {}
+    for i, node in ipairs(planned.nodes) do
+        local idx = node.index
+        local lbl = labels[idx] or ("#" .. idx)
+        local axis_val = 0
+        if node.axis and node.axis.kind == "Column" then axis_val = 1 end
+        table.insert(debug_meta_values, {
+            label = lbl,
+            axis = axis_val,
+            has_clip = node.clip_slot ~= nil,
+            has_scroll = node.scroll_slot ~= nil,
+            has_float = node.float_slot ~= nil,
+            has_text = node.text_slot ~= nil,
+            depth = depth_map[idx] or 0,
+        })
+    end
+end
+
+-- HSL-to-RGB for depth-based color cycling
+terra hsl_to_rgb(h: float, s: float, l: float, out_r: &float, out_g: &float, out_b: &float)
+    var c = (1.0f - C.fabsf(2.0f * l - 1.0f)) * s
+    var hp = h / 60.0f
+    var x = c * (1.0f - C.fabsf(C.fmodf(hp, 2.0f) - 1.0f))
+    var r1: float, g1: float, b1: float = 0.0f, 0.0f, 0.0f
+    if hp < 1.0f then      r1 = c; g1 = x; b1 = 0
+    elseif hp < 2.0f then  r1 = x; g1 = c; b1 = 0
+    elseif hp < 3.0f then  r1 = 0; g1 = c; b1 = x
+    elseif hp < 4.0f then  r1 = 0; g1 = x; b1 = c
+    elseif hp < 5.0f then  r1 = x; g1 = 0; b1 = c
+    else                   r1 = c; g1 = 0; b1 = x
+    end
+    var m = l - c * 0.5f
+    @out_r = r1 + m
+    @out_g = g1 + m
+    @out_b = b1 + m
+end
+
+-- Global metadata array — initialized via codegen since rawstring can't go
+-- through terralib.new.  Each label is a terralib.constant string.
+local debug_meta_arr = global(DebugNodeMeta[node_count])
+local debug_meta_init_stmts = terralib.newlist()
+for i, m in ipairs(debug_meta_values) do
+    local lbl = terralib.constant(rawstring, m.label)
+    local idx = i - 1
+    debug_meta_init_stmts:insert(quote
+        debug_meta_arr[idx].label = lbl
+        debug_meta_arr[idx].axis = [m.axis]
+        debug_meta_arr[idx].has_clip = [m.has_clip]
+        debug_meta_arr[idx].has_scroll = [m.has_scroll]
+        debug_meta_arr[idx].has_float = [m.has_float]
+        debug_meta_arr[idx].has_text = [m.has_text]
+        debug_meta_arr[idx].depth = [m.depth]
+    end)
+end
+terra init_debug_meta()
+    [debug_meta_init_stmts]
+end
+
+terra draw_debug_overlay(session: &sdl.Session, app: &DemoApp, frame: &Frame)
+    if app.debug_mode == 0 then return end
+
+    -- Disable any lingering scissor
+    C.glDisable(C.GL_SCISSOR_TEST)
+
+    var mx = frame.input.mouse_x
+    var my = frame.input.mouse_y
+    var hover_node: int32 = -1
+    var hover_area: float = 1e18f
+
+    C.glEnable(C.GL_BLEND)
+    C.glBlendFunc(C.GL_SRC_ALPHA, C.GL_ONE_MINUS_SRC_ALPHA)
+
+    -- Pass 1: draw node bounds
+    for i = 0, [node_count - 1] do
+        var n = frame.nodes[i]
+        if n.visible and n.w >= 1 and n.h >= 1 then
+            var meta = debug_meta_arr[i]
+
+            -- Depth-based hue cycling (golden angle ~137.5°)
+            var hue = C.fmodf([float](meta.depth) * 137.5f, 360.0f)
+            var r: float, g: float, b: float
+            hsl_to_rgb(hue, 0.75f, 0.55f, &r, &g, &b)
+
+            -- Brighten scroll/clip/float nodes
+            if meta.has_scroll then
+                r = 0.2f; g = 0.85f; b = 0.95f   -- cyan
+            elseif meta.has_clip then
+                r = 0.95f; g = 0.6f; b = 0.2f     -- orange
+            elseif meta.has_float then
+                r = 0.9f; g = 0.3f; b = 0.9f      -- magenta
+            end
+
+            -- Mode >= 2: draw padding fill
+            if app.debug_mode >= 2 then
+                -- Padding region = outer box minus content box, semi-transparent
+                C.glColor4f(r, g, b, 0.06f)
+                -- Top padding strip
+                sdl.gl_quad(n.x, n.y, n.w, n.content_y - n.y)
+                -- Bottom padding strip
+                sdl.gl_quad(n.x, n.content_y + n.content_h, n.w, (n.y + n.h) - (n.content_y + n.content_h))
+                -- Left padding strip
+                sdl.gl_quad(n.x, n.content_y, n.content_x - n.x, n.content_h)
+                -- Right padding strip
+                sdl.gl_quad(n.content_x + n.content_w, n.content_y, (n.x + n.w) - (n.content_x + n.content_w), n.content_h)
+            end
+
+            -- Outer bound wireframe
+            C.glColor4f(r, g, b, 0.45f)
+            sdl.gl_line_rect(n.x + 0.5f, n.y + 0.5f, n.w - 1.0f, n.h - 1.0f)
+
+            -- Content box wireframe (dashed effect: just dimmer)
+            if app.debug_mode >= 2 and (n.content_x ~= n.x or n.content_y ~= n.y or n.content_w ~= n.w or n.content_h ~= n.h) then
+                C.glColor4f(r, g, b, 0.22f)
+                sdl.gl_line_rect(n.content_x + 0.5f, n.content_y + 0.5f, n.content_w - 1.0f, n.content_h - 1.0f)
+            end
+
+            -- Hit test for hover tooltip
+            if mx >= n.x and mx < n.x + n.w and my >= n.y and my < n.y + n.h then
+                var area = n.w * n.h
+                if area < hover_area then
+                    hover_area = area
+                    hover_node = i
+                end
+            end
+        end
+    end
+
+    -- Pass 2: clip region indicators (red dashed)
+    if app.debug_mode >= 2 then
+        for i = 0, [node_count - 1] do
+            var n = frame.nodes[i]
+            if n.visible then
+                var meta = debug_meta_arr[i]
+                if meta.has_clip then
+                    C.glColor4f(1.0f, 0.25f, 0.15f, 0.55f)
+                    C.glLineWidth(2.0f)
+                    sdl.gl_line_rect(n.clip_x0 + 0.5f, n.clip_y0 + 0.5f,
+                        n.clip_x1 - n.clip_x0 - 1.0f, n.clip_y1 - n.clip_y0 - 1.0f)
+                    C.glLineWidth(1.0f)
+                end
+            end
+        end
+    end
+
+    -- Pass 3: highlight hovered node
+    if hover_node >= 0 then
+        var n = frame.nodes[hover_node]
+        C.glColor4f(1.0f, 1.0f, 1.0f, 0.15f)
+        sdl.gl_quad(n.x, n.y, n.w, n.h)
+        C.glColor4f(1.0f, 1.0f, 1.0f, 0.8f)
+        C.glLineWidth(2.0f)
+        sdl.gl_line_rect(n.x + 0.5f, n.y + 0.5f, n.w - 1.0f, n.h - 1.0f)
+        C.glLineWidth(1.0f)
+    end
+
+    -- Pass 4: mode >= 3 — draw node index labels at top-left of each node
+    if app.debug_mode >= 3 then
+        for i = 0, [node_count - 1] do
+            var n = frame.nodes[i]
+            if n.visible and n.w >= 16 and n.h >= 10 then
+                -- Small index badge
+                var label: int8[8]
+                C.snprintf(&label[0], 8, "%d", i)
+
+                var meta = debug_meta_arr[i]
+                var hue = C.fmodf([float](meta.depth) * 137.5f, 360.0f)
+                var r: float, g: float, b: float
+                hsl_to_rgb(hue, 0.75f, 0.55f, &r, &g, &b)
+                if meta.has_scroll then r = 0.2f; g = 0.85f; b = 0.95f
+                elseif meta.has_clip then r = 0.95f; g = 0.6f; b = 0.2f
+                elseif meta.has_float then r = 0.9f; g = 0.3f; b = 0.9f
+                end
+
+                -- Badge background
+                var tw: float = 7.0f * C.strlen(&label[0]) + 8.0f
+                C.glColor4f(0.0f, 0.0f, 0.0f, 0.72f)
+                sdl.gl_quad(n.x, n.y, tw, 14.0f)
+                -- Badge outline
+                C.glColor4f(r, g, b, 0.6f)
+                sdl.gl_line_rect(n.x + 0.5f, n.y + 0.5f, tw - 1.0f, 13.0f)
+
+                -- Render label text via TextCmd
+                var cmd: compile.TextCmd
+                C.memset(&cmd, 0, [terralib.sizeof(compile.TextCmd)])
+                cmd.x = n.x + 3.0f
+                cmd.y = n.y + 1.0f
+                cmd.w = tw - 6.0f
+                cmd.h = 12.0f
+                cmd.text = &label[0]
+                cmd.font_size = 10.0f
+                cmd.color = compile.Color { r, g, b, 1.0f }
+                cmd.wrap = [compile.TEXT_WRAP_NONE]
+                cmd.align = [compile.TEXT_ALIGN_LEFT]
+                sdl.draw_text(session, cmd)
+            end
+        end
+    end
+
+    -- Pass 5: tooltip for hovered node (mode >= 1)
+    if hover_node >= 0 then
+        var n = frame.nodes[hover_node]
+        var meta = debug_meta_arr[hover_node]
+
+        -- Build tooltip lines
+        var buf: int8[1024]
+        var pos = 0
+        pos = pos + C.snprintf(&buf[pos], 1024 - pos, "node %d  %s\n", hover_node, meta.label)
+        pos = pos + C.snprintf(&buf[pos], 1024 - pos, "axis: %s\n",
+            terralib.select(meta.axis == 0, "Row", "Column"))
+        pos = pos + C.snprintf(&buf[pos], 1024 - pos, "pos: (%.0f, %.0f)  size: %.0f x %.0f\n",
+            n.x, n.y, n.w, n.h)
+        pos = pos + C.snprintf(&buf[pos], 1024 - pos, "content: (%.0f, %.0f)  %.0f x %.0f\n",
+            n.content_x, n.content_y, n.content_w, n.content_h)
+        if meta.has_clip then
+            pos = pos + C.snprintf(&buf[pos], 1024 - pos, "clip: (%.0f, %.0f) -> (%.0f, %.0f)\n",
+                n.clip_x0, n.clip_y0, n.clip_x1, n.clip_y1)
+        end
+        if meta.has_scroll then
+            pos = pos + C.snprintf(&buf[pos], 1024 - pos, "scroll: (%.1f, %.1f)  need: %s%s\n",
+                n.scroll_x, n.scroll_y,
+                terralib.select(n.scroll_need_x, "x", ""),
+                terralib.select(n.scroll_need_y, "y", ""))
+            pos = pos + C.snprintf(&buf[pos], 1024 - pos, "extent: %.0f x %.0f\n",
+                n.content_extent_w, n.content_extent_h)
+        end
+        if meta.has_text then
+            pos = pos + C.snprintf(&buf[pos], 1024 - pos, "text node")
+        end
+        if meta.has_float then
+            pos = pos + C.snprintf(&buf[pos], 1024 - pos, "float")
+        end
+
+        -- Count lines and estimate width from the longest line so the
+        -- inspector tooltip is compact but never vertically cramped.
+        var lines = 1
+        var cur_chars = 0
+        var max_chars = 0
+        for k = 0, pos - 1 do
+            if buf[k] == ("\n")[0] then
+                if cur_chars > max_chars then max_chars = cur_chars end
+                cur_chars = 0
+                lines = lines + 1
+            else
+                cur_chars = cur_chars + 1
+            end
+        end
+        if cur_chars > max_chars then max_chars = cur_chars end
+        if pos > 0 and buf[pos - 1] == ("\n")[0] then lines = lines - 1 end
+
+        var pad_x: float = 12.0f
+        var pad_y: float = 12.0f
+        var font_size: float = 12.0f
+        var line_h: float = 18.0f
+        var est_char_w: float = 7.6f
+        var tw = [float](max_chars) * est_char_w + pad_x * 2.0f
+        if tw < 260.0f then tw = 260.0f end
+        if tw > 420.0f then tw = 420.0f end
+        var th: float = [float](lines) * line_h + pad_y * 2.0f + 4.0f
+
+        -- Position tooltip near mouse, keep on screen with a small margin.
+        var tx = mx + 18.0f
+        var ty = my + 18.0f
+        if tx + tw > frame.viewport_w - 8.0f then tx = mx - tw - 10.0f end
+        if ty + th > frame.viewport_h - 8.0f then ty = my - th - 10.0f end
+        if tx < 8.0f then tx = 8.0f end
+        if ty < 8.0f then ty = 8.0f end
+
+        -- Background
+        C.glColor4f(0.06f, 0.07f, 0.09f, 0.94f)
+        sdl.gl_quad(tx, ty, tw, th)
+        -- Border
+        C.glColor4f(0.5f, 0.6f, 0.7f, 0.7f)
+        sdl.gl_line_rect(tx + 0.5f, ty + 0.5f, tw - 1.0f, th - 1.0f)
+
+        -- Render tooltip text line by line
+        var line_start = 0
+        var line_idx = 0
+        for k = 0, pos do
+            if k == pos or buf[k] == ("\n")[0] then
+                if k > line_start then
+                    var saved = buf[k]
+                    buf[k] = 0
+                    var cmd: compile.TextCmd
+                    C.memset(&cmd, 0, [terralib.sizeof(compile.TextCmd)])
+                    cmd.x = tx + pad_x
+                    cmd.y = ty + pad_y + 1.0f + [float](line_idx) * line_h
+                    cmd.w = tw - pad_x * 2.0f
+                    cmd.h = line_h
+                    cmd.text = &buf[line_start]
+                    cmd.font_size = font_size
+                    cmd.wrap = [compile.TEXT_WRAP_NONE]
+                    cmd.align = [compile.TEXT_ALIGN_LEFT]
+                    if line_idx == 0 then
+                        cmd.color = compile.Color { 1.0f, 1.0f, 1.0f, 1.0f }
+                    else
+                        cmd.color = compile.Color { 0.75f, 0.80f, 0.88f, 1.0f }
+                    end
+                    sdl.draw_text(session, cmd)
+                    buf[k] = saved
+                end
+                line_start = k + 1
+                line_idx = line_idx + 1
+            end
+        end
+    end
+
+    -- Mode indicator in top-right corner
+    var mode_labels: rawstring[4]
+    mode_labels[0] = ""
+    mode_labels[1] = "DEBUG: bounds"
+    mode_labels[2] = "DEBUG: bounds + padding"
+    mode_labels[3] = "DEBUG: full"
+    if app.debug_mode > 0 then
+        var lbl = mode_labels[app.debug_mode]
+        var lw: float = 8.0f * C.strlen(lbl) + 16.0f
+        var lx = frame.viewport_w - lw - 10.0f
+        var ly: float = 10.0f
+        C.glColor4f(0.05f, 0.06f, 0.08f, 0.90f)
+        sdl.gl_quad(lx, ly, lw, 24.0f)
+        C.glColor4f(0.4f, 0.8f, 1.0f, 0.7f)
+        sdl.gl_line_rect(lx + 0.5f, ly + 0.5f, lw - 1.0f, 23.0f)
+        var cmd: compile.TextCmd
+        C.memset(&cmd, 0, [terralib.sizeof(compile.TextCmd)])
+        cmd.x = lx + 8.0f
+        cmd.y = ly + 5.0f
+        cmd.w = lw - 16.0f
+        cmd.h = 14.0f
+        cmd.text = lbl
+        cmd.font_size = 12.0f
+        cmd.color = compile.Color { 0.4f, 0.85f, 1.0f, 1.0f }
+        cmd.wrap = [compile.TEXT_WRAP_NONE]
+        cmd.align = [compile.TEXT_ALIGN_LEFT]
+        sdl.draw_text(session, cmd)
+    end
+end
+
+---------------------------------------------------------------------------
 
 terra maybe_handle_action(app: &DemoApp, frame: &Frame)
     if frame.action_name == nil then return end
@@ -642,7 +1134,8 @@ terra main(argc: int, argv: &rawstring)
     var max_frames: int = -1
     var hidden = false
     var debug_scroll = false
-    if argc > 1 and C.strcmp(argv[1], "hidden") ~= 0 and C.strcmp(argv[1], "debug-scroll") ~= 0 then
+    var debug_geom = false
+    if argc > 1 and C.strcmp(argv[1], "hidden") ~= 0 and C.strcmp(argv[1], "debug-scroll") ~= 0 and C.strcmp(argv[1], "debug-geom") ~= 0 then
         max_frames = C.atoi(argv[1])
     end
     for i = 1, argc - 1 do
@@ -650,6 +1143,8 @@ terra main(argc: int, argv: &rawstring)
             hidden = true
         elseif C.strcmp(argv[i], "debug-scroll") == 0 then
             debug_scroll = true
+        elseif C.strcmp(argv[i], "debug-geom") == 0 then
+            debug_geom = true
         end
     end
 
@@ -664,9 +1159,18 @@ terra main(argc: int, argv: &rawstring)
             C.fclose(f)
         end
     end
+    if debug_geom then
+        var f = C.fopen([debug_geom_log_path], "w")
+        if f ~= nil then
+            C.fprintf(f, "[geom-debug] enabled\n")
+            C.fflush(f)
+            C.fclose(f)
+        end
+    end
 
     var rc = app_init(&app, hidden)
     if rc ~= 0 then return rc end
+    init_debug_meta()
 
     var frame: Frame
     [init_q](&frame)
@@ -699,7 +1203,12 @@ terra main(argc: int, argv: &rawstring)
         maybe_handle_action(&app, &frame)
         update_live_state(&app, &frame)
         sync_params(&frame, &app)
+        if (debug_geom or debug_scroll) and frames < 4 then
+            debug_geom_state(&frame, "before replay")
+        end
         replay(&app.backend, &app, &frame)
+        draw_debug_overlay(&app.backend, &app, &frame)
+        sdl.swap_window(&app.backend)
         frames = frames + 1
     end
 

@@ -21,6 +21,8 @@ This file is the entry point for the TerraUI design set.
 - `docs/design/11-schema-dsl.md` — Terra language-extension schema DSL for authoring and validating the ASDL
 - `docs/design/12-backend-contracts.md` — backend identity, runtime session, and presenter/backend contract
 - `docs/design/13-scroll-and-scroll-areas.md` — proposed redesign splitting structural clip from runtime-backed scroll areas
+- `docs/design/14-widget-styling-and-themes.md` — theme tokens, widget parts, and style-patch design
+- `docs/design/15-painting-model.md` — presentational scope, paint categories, and future paint-growth rules
 - `docs/design/terraui.asdl` — canonical raw ASDL schema
 
 Recommended implementation reading order:
@@ -37,7 +39,9 @@ Recommended implementation reading order:
 11. `03-runtime-backends-opengl.md`
 12. `12-backend-contracts.md`
 13. `13-scroll-and-scroll-areas.md`
-14. `04-prototype-and-open-questions.md`
+14. `14-widget-styling-and-themes.md`
+15. `15-painting-model.md`
+16. `04-prototype-and-open-questions.md`
 
 ## 1. Product definition
 
@@ -56,14 +60,16 @@ The final conversation revisions converge on these decisions:
 1. The pipeline is:
    **Decl -> Bound -> Plan -> Kernel**
 2. `Bound` replaces the earlier looser `Norm` naming.
-3. `Clip` is first-class for structural viewport clipping, and scrolling is being split into its own first-class runtime-backed concept.
-4. `aspect_ratio` belongs on the node itself, not only on image leaves.
-5. The `Plan` phase flattens the tree into a dense node array plus typed side tables.
-6. The `Kernel` phase should remain record-only and as monomorphic as possible.
-7. Rendering stays split by command stream.
-8. Correct cross-stream draw order is preserved with a per-command `seq` field plus merge on `(z, seq)`.
-9. Text remains high-level in the kernel and is shaped later by the presenter/font backend.
-10. The first real proof target is a small editor/inspector UI vertical slice.
+3. `Clip` is first-class for structural viewport clipping, and scrolling is split into its own first-class runtime-backed concept.
+4. Widget composition is a `Decl`-layer authoring concept that elaborates away during bind.
+5. The next styling layer should use typed theme tokens, explicit widget parts, and part-local style patches rather than selector-based cascading.
+6. `aspect_ratio` belongs on the node itself, not only on image leaves.
+7. The `Plan` phase flattens the tree into a dense node array plus typed side tables.
+8. The `Kernel` phase should remain record-only and as monomorphic as possible.
+9. Rendering stays split by command stream.
+10. Correct cross-stream draw order is preserved with a per-command `seq` field plus merge on `(z, seq)`.
+11. Text remains high-level in the kernel and is shaped later by the presenter/font backend.
+12. The first real proof target is a small editor/inspector UI vertical slice.
 
 ## 3. System context
 
@@ -146,6 +152,14 @@ Do not collapse draw commands into one tagged union. Keep separate streams and r
 - hover / active / focus / wheel interaction
 - OpenGL 3.3 renderer backend
 - simple font backend contract
+- Decl-layer widget composition
+
+### Next design target
+- typed theme tokens
+- lexical theme scopes
+- explicit widget parts
+- part-local style patches
+- richer but still typed painting semantics
 
 ### Excluded for now
 - browser-grade layout
@@ -154,6 +168,7 @@ Do not collapse draw commands into one tagged union. Keep separate streams and r
 - accessibility system
 - generalized reactive runtime
 - CSS-like styling engine
+- selector-based widget styling or cascade
 
 ## 7. Why this design fits Terra
 
@@ -171,11 +186,14 @@ TerraUI leans directly on the Terra compiler pattern already captured in this re
 3. Clip begin/end must bracket the entire subtree, not only node-local paint.
 4. Cross-stream draw ordering must be preserved globally.
 5. Hit testing must respect ancestor clipping.
-6. Text shaping should stay outside the kernel for v1.
+6. Theme, part, and style-patch authoring sugar must be fully eliminated by the end of bind.
+7. Text shaping should stay outside the kernel for v1.
 
 ## 9. Recommended reading order
 
 1. `01-ir-and-pipeline.md`
 2. `02-layout-input-and-rendering.md`
-3. `03-runtime-backends-opengl.md`
-4. `04-prototype-and-open-questions.md`
+3. `14-widget-styling-and-themes.md`
+4. `15-painting-model.md`
+5. `03-runtime-backends-opengl.md`
+6. `04-prototype-and-open-questions.md`

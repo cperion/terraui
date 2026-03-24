@@ -14,6 +14,8 @@ This document defines the execution semantics that sit between the IR and the ba
 - hit testing
 - render command emission and ordering
 
+For the next design layer, theme tokens and style patches are still authored above these semantics. They should be elaborated into ordinary decor/text/image values before this document’s runtime rules apply.
+
 ## 2. Layout model
 
 The intended layout model is Clay-like:
@@ -238,6 +240,13 @@ TerraUI emits separate command streams:
 - image
 - scissor
 - custom
+
+Theme tokens and style patches do not change this command model. They only influence the authored values that feed:
+- box decor
+- text style
+- image tint
+
+See `docs/design/15-painting-model.md` for the broader paint-surface design.
 
 This preserves the monomorphic kernel goal.
 

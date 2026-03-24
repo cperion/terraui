@@ -122,6 +122,15 @@ ui.env
 ui.param_ref
 ui.state_ref
 ui.prop_ref
+
+-- design-target next layer
+ui.theme_def
+ui.theme_token
+ui.with_theme
+ui.token
+ui.widget_part
+ui.part
+ui.style
 ```
 
 ## 3.4 Namespaces
@@ -698,7 +707,7 @@ ui.radius(tl, tr, br, bl)
 ```lua
 ui.call(fn, ...)
 ui.select(cond, yes, no)
-ui.theme(name)
+ui.theme(name)          -- current thin theme/env sugar
 ui.env(name)
 ui.param_ref(name)
 ui.state_ref(name)
@@ -716,6 +725,18 @@ ui.scroll.max_y(target)
 ui.scroll.thumb(target, axis)
 ui.scroll.page_dec(target, axis)
 ui.scroll.page_inc(target, axis)
+
+-- design-target next layer
+ui.theme_def(name) { parent = ..., tokens = {...} }
+ui.theme_token(name, ty, value)
+ui.with_theme(name[, overrides]) { ... }
+ui.token(name)
+ui.token.color(name)
+ui.token.number(name)
+ui.token.string(name)
+ui.widget_part(name)
+ui.part(name, child)
+ui.style { ... }
 ```
 
 ## 11. Public entrypoint helpers
@@ -751,7 +772,19 @@ Compiles a precomputed `Plan.Component`.
 ### Memoization note
 The public compile path is memoized using Terra's memoization machinery and a deterministic key derived from `Plan.Component.key`.
 
-## 13. Error contract
+## 13. Next design-target styling helpers
+
+The next public styling/theming layer is expected to standardize around:
+- typed theme token definitions
+- lexical theme scopes
+- explicit widget part declarations
+- part-local style patches
+
+See:
+- `docs/design/14-widget-styling-and-themes.md`
+- `docs/design/15-painting-model.md`
+
+## 14. Error contract
 
 The current builders fail fast on:
 - missing required props for several widgets
@@ -768,7 +801,7 @@ Still future work:
 - strict unknown-prop validation for all built-in node constructors
 - richer expression typing beyond the current obvious/bindable subset
 
-## 14. Canonical minimal shipped surface
+## 15. Canonical minimal shipped surface
 
 ```lua
 ui.component("name") { ... }
@@ -813,7 +846,7 @@ ui.param_ref(...)
 ui.state_ref(...)
 ```
 
-## 15. Design conclusion
+## 16. Design conclusion
 
 The current builder/reference surface is now standardized around:
 

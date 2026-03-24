@@ -30,6 +30,12 @@ do
     assert(r.y == 130)
     assert(r.w == 50)
     assert(r.h == 50)
+
+    local rf = glb.scissor_to_gl({ x0 = 10.1, y0 = 20.2, x1 = 60.0, y1 = 70.0 }, 200)
+    assert(rf.x == 10)
+    assert(rf.y == 130)
+    assert(rf.w == 50)
+    assert(rf.h == 50)
     print("  test 1 (scissor y-flip): ok")
 end
 

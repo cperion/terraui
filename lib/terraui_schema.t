@@ -30,6 +30,7 @@ local schema TerraUI
             name: string
             params: Param*
             state: StateSlot*
+            themes: ThemeDef*
             widgets: WidgetDef*
             root: Node
         unique
@@ -57,11 +58,34 @@ local schema TerraUI
             TAny
         end
 
+        record ThemeDef
+            name: string
+            parent: string?
+            tokens: ThemeToken*
+        end
+
+        record ThemeToken
+            name: string
+            ty: ValueType
+            value: Expr
+        end
+
+        record ThemeOverride
+            name: string
+            value: Expr
+        end
+
+        record ThemeScope
+            base_theme: string?
+            overrides: ThemeOverride*
+        end
+
         record WidgetDef
             name: string
             props: WidgetProp*
             state: StateSlot*
             slots: WidgetSlot*
+            parts: WidgetPart*
             root: Node
         end
 
@@ -75,8 +99,29 @@ local schema TerraUI
             name: string
         end
 
+        record WidgetPart
+            name: string
+        end
+
+        record StylePatch
+            background: Expr?
+            border: Border?
+            radius: CornerRadius?
+            opacity: Expr?
+            text_color: Expr?
+            font_id: Expr?
+            font_size: Expr?
+            letter_spacing: Expr?
+            line_height: Expr?
+            wrap: WrapMode?
+            text_align: TextAlign?
+            image_tint: Expr?
+        end
+
         record Node
             id: Id
+            part: string?
+            theme_scope: ThemeScope?
             visibility: Visibility
             layout: Layout
             decor: Decor
@@ -106,12 +151,18 @@ local schema TerraUI
             id: Id?
             name: string
             props: PropArg*
+            styles: PartStyleArg*
             slots: SlotArg*
         end
 
         record PropArg
             name: string
             value: Expr
+        end
+
+        record PartStyleArg
+            name: string
+            patch: StylePatch
         end
 
         record SlotArg
@@ -330,7 +381,7 @@ local schema TerraUI
             ParamRef { name: string }
             StateRef { name: string }
             WidgetPropRef { name: string }
-            ThemeRef { name: string }
+            TokenRef { name: string }
             EnvRef { name: string }
             ScrollMetric { id: Id, metric: ScrollMetricKind }
             Unary { op: string, rhs: Expr }

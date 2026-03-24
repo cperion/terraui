@@ -57,7 +57,7 @@ Practical implication:
 
 The schema in `docs/design/terraui.asdl` defines four modules:
 
-- `Decl` — authored immediate-mode description
+- `Decl` — authored immediate-mode description, including widgets, theme tokens, theme scopes, and style patches
 - `Bound` — resolved / canonical tree
 - `Plan` — flattened layout / paint / input plan
 - `Kernel` — monomorphic compiled artifact
@@ -68,6 +68,8 @@ It also defines the external compile-time contract types:
 - `BindCtx`
 - `PlanCtx`
 - `CompileCtx`
+
+The next design target also treats widget styling and themes as first-class authored concepts in `Decl`, while keeping `Bound`, `Plan`, and `Kernel` free of theme/part/style machinery.
 
 ## 5. Important design adjustments made while finalizing the ASDL
 
@@ -101,6 +103,7 @@ This is not a blind copy of the raw conversation. The final `.asdl` includes a f
 8. `Plan.Node` now carries both `clip_slot` and `scroll_slot`.
 
 9. `Kernel.RuntimeTypes` includes `params_t` and `state_t` explicitly.
+10. Theme definitions, token refs, widget parts, and style patches belong only to `Decl` and are intended to elaborate away during bind.
 
 ## 6. Main structural decisions reflected in the ASDL
 
@@ -114,11 +117,24 @@ The schema keeps one generic node record with optional features instead of a lar
 
 `Scroll` / `ScrollSpec` are now separate schema elements for runtime-backed content translation, wheel routing, and scroll-range logic.
 
-### 6.3 Node-level aspect ratio
+### 6.3 Theme/token/part/style model stays Decl-only
+
+The canonical schema now treats the following as authored `Decl` concepts only:
+- `ThemeDef`
+- `ThemeToken`
+- `ThemeScope`
+- `TokenRef`
+- `WidgetPart`
+- `StylePatch`
+- widget-call part-style arguments
+
+These should be erased during bind rather than widened into lower-phase theme/style records.
+
+### 6.4 Node-level aspect ratio
 
 `aspect_ratio` is on the node itself, so text, image, and custom leaves can all share the same box rule.
 
-### 6.4 Flattened Plan side tables
+### 6.5 Flattened Plan side tables
 
 `Plan` stores a dense node array plus typed side tables:
 - guards
@@ -131,7 +147,7 @@ The schema keeps one generic node record with optional features instead of a lar
 - customs
 - floats
 
-### 6.5 Narrow Kernel phase
+### 6.6 Narrow Kernel phase
 
 `Kernel` remains record-oriented and avoids sum types.
 

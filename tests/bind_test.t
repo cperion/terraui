@@ -64,12 +64,12 @@ local function child_list(xs)
     return out
 end
 
-local function component(name, params, state, root, widgets)
-    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+local function component(name, params, state, root, widgets, themes)
+    return Decl.Component(name, params or List(), state or List(), themes or List(), widgets or List(), root)
 end
 
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, nil, nil, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 
 local function make_label(name, text)
@@ -198,8 +198,8 @@ do
     local e = Decl.EnvRef("viewport_w"):bind(ctx)
     assert(e.kind == "EnvSlot" and e.name == "viewport_w")
 
-    local t = Decl.ThemeRef("bg_color"):bind(ctx)
-    assert(t.kind == "EnvSlot" and t.name == "theme:bg_color")
+    local t = Decl.TokenRef("bg_color"):bind(ctx)
+    assert(t.kind == "EnvSlot" and t.name == "token:bg_color")
 
     -- Unary
     local u = Decl.Unary("-", Decl.NumLit(5)):bind(ctx)
@@ -501,6 +501,7 @@ do
         List{ Decl.WidgetProp("title", Decl.TString, nil) },
         List(),
         List{ Decl.WidgetSlot("children") },
+        List(),
         node(
             Decl.Stable("root"),
             no_vis(), fit_layout(), no_decor(),
@@ -528,6 +529,7 @@ do
                     Decl.Stable("card1"),
                     "Card",
                     List{ Decl.PropArg("title", Decl.StringLit("Inspector")) },
+                    List(),
                     List{ Decl.SlotArg("children", child_list { make_label("body", "Hello") }) }))
             }),
         List{ card })
@@ -557,6 +559,7 @@ do
         List(),
         List{ Decl.StateSlot("level", Decl.TNumber, Decl.NumLit(7)) },
         List(),
+        List(),
         node(
             Decl.Stable("root"),
             no_vis(),
@@ -581,8 +584,8 @@ do
             no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil,
             child_list {
-                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m1"), "Meter", List(), List())),
-                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m2"), "Meter", List(), List())),
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m1"), "Meter", List(), List(), List())),
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m2"), "Meter", List(), List(), List())),
             }),
         List{ meter })
 
@@ -612,6 +615,7 @@ do
         List{ Decl.WidgetProp("title", Decl.TString, nil) },
         List(),
         List{ Decl.WidgetSlot("children") },
+        List(),
         node(
             Decl.Stable("root"),
             no_vis(), fit_layout(), no_decor(),
@@ -632,6 +636,7 @@ do
                     Decl.Stable("card1"),
                     "TypedCard",
                     List{ Decl.PropArg("title", Decl.ParamRef("count")) },
+                    List(),
                     List()))
             }),
         List{ card })
@@ -643,6 +648,75 @@ do
     assert(err:match("widget prop type mismatch"))
 
     print("  test 17 (widget prop type validation): ok")
+end
+
+----------------------------------------------------------------------------
+-- Test 18: theme scopes and part style patches elaborate during bind
+---------------------------------------------------------------------------
+
+do
+    local badge = Decl.WidgetDef(
+        "Badge",
+        List{ Decl.WidgetProp("text", Decl.TString, nil) },
+        List(),
+        List(),
+        List{ Decl.WidgetPart("root"), Decl.WidgetPart("label") },
+        Decl.Node(
+            Decl.Stable("root"), "root", nil,
+            no_vis(), fit_layout(),
+            Decl.Decor(Decl.TokenRef("color.surface.panel"), nil, nil, nil),
+            nil, nil, nil, nil, no_input(), nil, nil,
+            child_list {
+                Decl.Node(
+                    Decl.Stable("label"), "label", nil,
+                    no_vis(), fit_layout(), no_decor(),
+                    nil, nil, nil, nil, no_input(), nil,
+                    Decl.Text(Decl.TextLeaf(Decl.WidgetPropRef("text"), Decl.TextStyle(
+                        Decl.TokenRef("color.text.primary"),
+                        Decl.StringLit("default"),
+                        Decl.NumLit(14),
+                        Decl.NumLit(0),
+                        Decl.NumLit(1.2),
+                        Decl.WrapNone,
+                        Decl.TextAlignLeft))),
+                    List()),
+            }))
+
+    local comp = Decl.Component(
+        "theme_bind",
+        List(),
+        List(),
+        List{ Decl.ThemeDef("dark", nil, List{
+            Decl.ThemeToken("color.surface.panel", Decl.TColor, Decl.ColorLit(0.1, 0.2, 0.3, 1)),
+            Decl.ThemeToken("color.text.primary", Decl.TColor, Decl.ColorLit(0.9, 0.8, 0.7, 1)),
+        }) },
+        List{ badge },
+        node(
+            Decl.Stable("root"),
+            no_vis(), fit_layout(), no_decor(),
+            nil, nil, no_input(), nil, nil,
+            child_list {
+                Decl.WidgetChild((function()
+                    local call = Decl.WidgetCall(
+                        Decl.Stable("badge1"),
+                        "Badge",
+                        List{ Decl.PropArg("text", Decl.StringLit("Hello")) },
+                        List{ Decl.PartStyleArg("root", Decl.StylePatch(
+                            Decl.ColorLit(1, 0, 0, 1), nil, nil, nil,
+                            nil, nil, nil, nil, nil, nil, nil, nil)) },
+                        List())
+                    rawset(call, "_terraui_theme_scope", Decl.ThemeScope("dark", List()))
+                    return call
+                end)()),
+            }))
+
+    local bound = bind.bind_component(comp)
+    assert(bound.root.children[1].decor.background.kind == "ConstColor")
+    assert(bound.root.children[1].decor.background.r == 1)
+    assert(bound.root.children[1].children[1].leaf.value.style.color.kind == "ConstColor")
+    assert(bound.root.children[1].children[1].leaf.value.style.color.r == 0.9)
+
+    print("  test 18 (theme scopes + part style patches): ok")
 end
 
 ---------------------------------------------------------------------------

@@ -468,7 +468,71 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Test 11: public compile entry works and memoizes
+-- Test 11: themes, parts, and style patches lower and bind
+---------------------------------------------------------------------------
+
+do
+    local badge = ui.widget("Badge") {
+        props = {
+            ui.widget_prop("text") { type = ui.types.string },
+        },
+        parts = {
+            ui.widget_part("root"),
+            ui.widget_part("label"),
+        },
+        root = ui.part("root", ui.row {
+            key = ui.stable("root"),
+            background = ui.token.color("color.surface.panel"),
+        } {
+            ui.part("label", ui.label {
+                key = ui.stable("label"),
+                text = ui.prop_ref("text"),
+                text_color = ui.token.color("color.text.primary"),
+            }),
+        }),
+    }
+
+    local decl = ui.component("theme_parts") {
+        themes = {
+            ui.theme_def("dark") {
+                tokens = {
+                    ui.theme_token("color.surface.panel", ui.types.color, ui.rgba(0.1, 0.2, 0.3, 1)),
+                    ui.theme_token("color.text.primary", ui.types.color, ui.rgba(0.9, 0.8, 0.7, 1)),
+                },
+            },
+        },
+        widgets = { badge },
+        root = ui.column { key = ui.stable("root") } {
+            ui.with_theme("dark") {
+                ui.use(badge) {
+                    key = ui.stable("badge1"),
+                    text = "Hello",
+                    styles = {
+                        root = ui.style { background = ui.rgba(1, 0, 0, 1) },
+                    },
+                } {},
+            },
+        },
+    }
+
+    assert(#decl.themes == 1)
+    assert(decl.themes[1].name == "dark")
+    assert(#decl.widgets[1].parts == 2)
+    assert(decl.root.children[1].kind == "WidgetChild")
+    assert(#decl.root.children[1].value.styles == 1)
+    assert(decl.root.children[1].value.styles[1].name == "root")
+
+    local bound = terraui.bind(decl)
+    assert(bound.root.children[1].decor.background.kind == "ConstColor")
+    assert(bound.root.children[1].decor.background.r == 1)
+    assert(bound.root.children[1].children[1].leaf.value.style.color.kind == "ConstColor")
+    assert(bound.root.children[1].children[1].leaf.value.style.color.r == 0.9)
+
+    print("  test 11 (themes + parts + style patches): ok")
+end
+
+---------------------------------------------------------------------------
+-- Test 12: public compile entry works and memoizes
 ---------------------------------------------------------------------------
 
 do
@@ -513,7 +577,7 @@ do
     end
     assert(test() == 0)
 
-    print("  test 11 (public compile entry): ok")
+    print("  test 12 (public compile entry): ok")
 end
 
 ---------------------------------------------------------------------------

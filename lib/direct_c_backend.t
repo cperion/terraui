@@ -23,11 +23,11 @@ M.BackendAPI = BackendAPI
 local function current_scissor_gl(scissor_stack, viewport_h)
     local top = scissor_stack[#scissor_stack]
     if not top then return nil end
-    local x = top.x0
-    local y = viewport_h - top.y1
-    local w = top.x1 - top.x0
-    local h = top.y1 - top.y0
-    return { x = x, y = y, w = w, h = h }
+    local x0 = math.floor(top.x0)
+    local x1 = math.ceil(top.x1)
+    local y0 = math.floor(viewport_h - top.y1)
+    local y1 = math.ceil(viewport_h - top.y0)
+    return { x = x0, y = y0, w = x1 - x0, h = y1 - y0 }
 end
 
 local function scissor_equal(a, b)

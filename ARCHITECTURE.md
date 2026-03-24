@@ -27,6 +27,8 @@ Current implementation files of note:
 - `docs/design/11-schema-dsl.md`
 - `docs/design/12-backend-contracts.md`
 - `docs/design/13-scroll-and-scroll-areas.md`
+- `docs/design/14-widget-styling-and-themes.md`
+- `docs/design/15-painting-model.md`
 - `docs/design/terraui.asdl`
 
 ## Notes
@@ -37,6 +39,8 @@ Important final-source changes reflected in the split docs:
 - pipeline is `Decl -> Bound -> Plan -> Kernel`
 - `Bound` replaces the earlier `Norm` terminology
 - `Clip` now covers structural viewport clipping; `Scroll` is implemented as a separate first-class concept, and standard scrollbars/scroll areas live at the widget layer
+- widget composition is a Decl-layer concept that elaborates away during bind
+- the next styling layer is centered on typed theme tokens, explicit widget parts, and part-local style patches rather than selector-based cascade
 - `aspect_ratio` is node-level
 - `Plan.Node` carries subtree information for correct clip bracketing
 - render commands keep split streams but require `seq` for global ordering
@@ -58,4 +62,6 @@ Important final-source changes reflected in the split docs:
 12. `docs/design/03-runtime-backends-opengl.md`
 13. `docs/design/12-backend-contracts.md`
 14. `docs/design/13-scroll-and-scroll-areas.md`
-15. `docs/design/04-prototype-and-open-questions.md`
+15. `docs/design/14-widget-styling-and-themes.md`
+16. `docs/design/15-painting-model.md`
+17. `docs/design/04-prototype-and-open-questions.md`

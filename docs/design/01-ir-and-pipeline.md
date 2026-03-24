@@ -59,8 +59,13 @@ flowchart LR
 - `Decl.Component`
 - `Decl.Param`
 - `Decl.StateSlot`
+- `Decl.ThemeDef`
+- `Decl.ThemeToken`
+- `Decl.ThemeScope`
 - `Decl.WidgetDef`
 - `Decl.WidgetCall`
+- `Decl.WidgetPart`
+- `Decl.StylePatch`
 - `Decl.Node`
 - `Decl.Child`
 - `Decl.Layout`
@@ -97,6 +102,17 @@ Later revisions replaced the older `Overflow` model with explicit `Clip`, and th
 
 This keeps clipping structural and scrolling behavioral.
 
+#### Theme/token/part/style concepts are also Decl-first
+
+The next styling design introduces authored concepts that belong only in `Decl`:
+- theme definitions and theme tokens
+- lexical theme scopes
+- token references in expressions
+- explicit widget parts
+- part-local style patches on widget calls
+
+Like widget calls themselves, these are intended to be **fully elaborated during bind** so lower phases stay canonical.
+
 #### Aspect ratio is node-level
 
 `aspect_ratio` is on the node itself, not just on image leaves. That lets any node participate in aspect-constrained sizing.
@@ -109,9 +125,11 @@ This keeps clipping structural and scrolling behavioral.
 
 - map params to slot indices
 - map state to slot indices
-- register widget definitions
+- register widget and theme definitions
 - elaborate widget calls and slot placeholders away
-- resolve theme refs and env refs
+- resolve token refs and env refs
+- apply lexical theme scopes
+- validate widget parts and apply part-local style patches
 - resolve intrinsic function names
 - normalize ids into stable ids
 - narrow expressions to `Bound.Value`
@@ -133,6 +151,8 @@ The final conversation uses a specialization key at this stage:
 - renderer
 - text backend
 - bound root tree
+
+Theme, part, and style-patch authoring sugar should not survive into the specialization key as separate concepts. Any specialization impact should come only from the resulting canonical bound tree and explicit backend identity.
 
 This is wrapped in `unique` ASDL identity and is intended to feed `terralib.memoize`.
 

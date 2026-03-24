@@ -57,12 +57,12 @@ local function child_list(xs)
     return out
 end
 
-local function component(name, params, state, root, widgets)
-    return Decl.Component(name, params or List(), state or List(), widgets or List(), root)
+local function component(name, params, state, root, widgets, themes)
+    return Decl.Component(name, params or List(), state or List(), themes or List(), widgets or List(), root)
 end
 
 local function node(id, visibility, layout, decor, clip, floating, input, aspect_ratio, leaf, children)
-    return Decl.Node(id, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
+    return Decl.Node(id, nil, nil, visibility, layout, decor, clip, nil, nil, floating, input, aspect_ratio, leaf, child_list(children))
 end
 
 local function make_label(name, text)
@@ -253,7 +253,7 @@ do
     local comp = component(
         "cliptest", List(), List(),
         Decl.Node(
-            Decl.Stable("root"), no_vis(), fit_layout(), no_decor(),
+            Decl.Stable("root"), nil, nil, no_vis(), fit_layout(), no_decor(),
             Decl.Clip(true, false),
             Decl.Scroll(false, true),
             nil,

@@ -5,6 +5,7 @@ SNAPSHOT ?= generated/terraui-runtime.asdl
 
 .PHONY: help test asdl snapshot check \
         demo demo-run demo-smoke \
+        demo-direct demo-direct-smoke \
         love2d love2d-build love2d-run
 
 help:
@@ -12,6 +13,10 @@ help:
 	@echo ""
 	@echo "  Testing"
 	@echo "    make test                 run the test suite"
+	@echo ""
+	@echo "  SDL + OpenGL demo (direct Terra runtime)"
+	@echo "    make demo-direct          run the demo directly in the Terra process"
+	@echo "    make demo-direct-smoke    smoke-run direct path (hidden, 2 frames)"
 	@echo ""
 	@echo "  SDL + OpenGL demo (AOT executable)"
 	@echo "    make demo                 build examples/sdl_gl_demo"
@@ -62,6 +67,12 @@ demo-run: demo
 
 demo-smoke:
 	./tests/aot_demo_smoke.sh
+
+demo-direct:
+	$(TERRA) examples/run_sdl_gl_demo.t
+
+demo-direct-smoke:
+	./tests/direct_demo_smoke.sh
 
 # ── Love2D demo ─────────────────────────────────────────────
 

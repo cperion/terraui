@@ -15,4 +15,5 @@ terra examples/widget_composition_example.t
 terra tests/presenter_test.t
 terra tests/opengl_backend_test.t
 terra tests/direct_c_backend_test.t
+./tests/direct_demo_smoke.sh
 ./tests/aot_demo_smoke.sh

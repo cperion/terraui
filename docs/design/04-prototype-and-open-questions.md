@@ -191,6 +191,14 @@ Do you want the v1 public API to ship with higher-level widgets such as:
 - inspector row
 or keep v1 closer to raw node composition primitives
 
+### Q11. Styling and theming surface
+For the next layer, should TerraUI style widgets through:
+- typed theme tokens + explicit widget parts + part-local style patches
+- widget-name/style-class matching tables
+- or a more CSS-like selector model
+
+The recommended direction is the first option because it keeps styling explicit and fully bind-elaboratable.
+
 ## 9. Recommended decision order
 
 Resolve questions in this order:
@@ -200,6 +208,7 @@ Resolve questions in this order:
 4. custom payload model
 5. text ambition for v1
 6. widget layer scope
+7. styling/theming model
 
 These affect implementation shape the most.
 
