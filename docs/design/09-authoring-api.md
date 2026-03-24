@@ -228,9 +228,9 @@ local decl = ui.component("demo_inspector") {
             padding = ui.pad(12),
             gap = 10,
         } {
-            ui.label  { ref = "title", text = ui.param_ref("title") },
-            ui.button { ref = "btn_save",  text = "Save",  action = "save"  },
-            ui.button { ref = "btn_build", text = "Build", action = "build" },
+            ui.label  { anchor = "title", text = ui.param_ref("title") },
+            ui.button { anchor = "btn_save",  text = "Save",  action = "save"  },
+            ui.button { anchor = "btn_build", text = "Build", action = "build" },
         },
 
         ui.row {
@@ -262,7 +262,7 @@ local decl = ui.component("demo_inspector") {
             } {
                 ui.label { text = "Preview" },
                 ui.image_view {
-                    ref = "preview",
+                    anchor = "preview",
                     image = ui.param_ref("preview_image"),
                     aspect_ratio = 16/9,
                     fit = ui.image_fit.contain,
@@ -362,10 +362,10 @@ Lowering notes:
 - `ui.prop_ref(name)` lowers to `Decl.WidgetPropRef(name)`
 - `ui.scope(id)` creates a DSL-only scope handle for a stable/indexed instance key
 - `scope:child("name", ...)` composes one or more nested instance keys and returns another scope handle
-- `scope:ref("name", ...)` builds `Decl.FloatById` for a local target under that scope
+- `scope:anchor("name", ...)` builds `Decl.FloatById` for a local anchor under that scope
 - scope handles are accepted anywhere a public `key` is accepted in the DSL
 - node/widget `key = ...` expresses instance identity
-- node `ref = ...` expresses a local target name under the nearest keyed scope
+- node `anchor = ...` expresses a local target name under the nearest keyed scope
 - `ui.state_ref(name)` inside a widget body resolves widget-local state first, then outer component state
 - the second brace on `ui.use(...)` may be either:
   - an ordered child list for the default `children` slot
@@ -465,16 +465,21 @@ Preferred public identity helpers:
 local card = ui.scope("card1")
 
 ui.use(Card) { key = card } { ... }
-ui.label { ref = "header", text = "Header" }
-ui.tooltip { target = card:ref("header") } { ... }
+ui.label { anchor = "header", text = "Header" }
+ui.tooltip { target = card:anchor("header") } { ... }
 ```
 
 Raw string ids also work in the current implementation and lower to stable ids.
 
+Semantic intent:
+- `key` = stable instance identity
+- `anchor` = local named visual target under the nearest keyed scope
+- `slot` = composition insertion point in a widget definition
+
 Implementation note:
 - `ui.scope(...)` is the public helper for composing instance keys
 - scope handles are DSL-only sugar and lower back into ordinary `Decl.Id` / `Decl.FloatById`
-- bind propagates keyed scopes so local `ref = ...` names resolve under the nearest keyed ancestor or widget instance
+- bind propagates keyed scopes so local `anchor = ...` names resolve under the nearest keyed ancestor or widget instance
 - that keeps cross-widget target references practical without requiring lower phases to know about widgets
 
 ## 14. Next styling/theming design target

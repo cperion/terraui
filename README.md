@@ -25,8 +25,8 @@ This repository currently contains:
   - `ui.slot(...)`
   - `ui.scope(...)`
   - `scope:child(...)`
-  - `scope:ref(...)`
-  - public `key = ...` and `ref = ...` authoring
+  - `scope:anchor(...)`
+  - public `key = ...` and `anchor = ...` authoring
 - CPU-side presenter and backend replay helpers in:
   - `lib/presenter.t`
   - `lib/opengl_backend.t`
@@ -147,7 +147,7 @@ local decl = ui.component("demo") {
                 ui.label { text = "Inspector" },
             },
             children = {
-                ui.label { ref = "body_label", text = "Body" },
+                ui.label { anchor = "body_label", text = "Body" },
             },
         },
     },
@@ -158,10 +158,11 @@ Widget definitions live in `Decl`, but bind elaborates them back into canonical 
 
 For identity and targeting, the DSL now centers on:
 - `key = ...` for instance identity
-- `ref = ...` for local target names
+- `anchor = ...` for local target names inside the nearest keyed scope
 - `local card = ui.scope("card")`
 - `card:child("nested_instance")`
-- `card:ref("body")`
+- `card:anchor("body")`
+
 
 A focused non-SDL example also lives at:
 

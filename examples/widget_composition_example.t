@@ -26,7 +26,7 @@ local Section = ui.widget("Section") {
         background = rgba(0.11, 0.12, 0.14, 1),
         border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.24, 0.26, 0.30, 1) },
     } {
-        ui.row { ref = "header", width = ui.grow(), height = ui.fit(), gap = 8 } {
+        ui.row { anchor = "header", width = ui.grow(), height = ui.fit(), gap = 8 } {
             ui.label { text = ui.prop_ref("title"), font_size = 18 },
             ui.spacer { width = ui.grow(), height = ui.fixed(0) },
             ui.slot("toolbar"),
@@ -91,14 +91,14 @@ local decl = ui.component("widget_composition_example") {
                     },
                     children = {
                         ui.image_view {
-                            ref = "image",
+                            anchor = "image",
                             image = "checker",
                             width = ui.fixed(280),
                             height = ui.fixed(180),
                         },
                         ui.tooltip {
                             key = ui.stable("tip"),
-                            target = preview:ref("image"),
+                            target = preview:anchor("image"),
                             parent_point = ui.attach.right_top,
                             element_point = ui.attach.left_bottom,
                             offset_x = 8,
@@ -107,11 +107,11 @@ local decl = ui.component("widget_composition_example") {
                             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.55, 0.43, 0.12, 1) },
                             padding = 8,
                         } {
-                            ui.label { text = "Tooltip target resolved through preview:ref(\"image\")", text_color = rgba(0.16, 0.13, 0.08, 1) },
+                            ui.label { text = "Tooltip target resolved through preview:anchor(\"image\")", text_color = rgba(0.16, 0.13, 0.08, 1) },
                         },
                         ui.tooltip {
                             key = ui.stable("header_tip"),
-                            target = preview:ref("header"),
+                            target = preview:anchor("header"),
                             parent_point = ui.attach.right_bottom,
                             element_point = ui.attach.left_top,
                             offset_x = 8,
@@ -120,7 +120,7 @@ local decl = ui.component("widget_composition_example") {
                             border = ui.border { left = 1, top = 1, right = 1, bottom = 1, color = rgba(0.28, 0.44, 0.60, 1) },
                             padding = 8,
                         } {
-                            ui.label { text = "Section header targeted through preview:ref(\"header\")", text_color = rgba(0.10, 0.18, 0.26, 1) },
+                            ui.label { text = "Section header targeted through preview:anchor(\"header\")", text_color = rgba(0.10, 0.18, 0.26, 1) },
                         },
                     },
                 },

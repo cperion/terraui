@@ -313,17 +313,17 @@ local function normalized_local_id_name(v, label)
     error(label .. " must be a string or stable id")
 end
 
-local function normalize_ref_id(id)
+local function normalize_anchor_id(id)
     if type(id) == "string" then
-        return Decl.Stable(normalized_local_id_name(id, "ref"))
+        return Decl.Stable(normalized_local_id_name(id, "anchor"))
     elseif is_decl_id(id) then
         if id.kind == "Stable" then
-            return Decl.Stable(normalized_local_id_name(id, "ref"))
+            return Decl.Stable(normalized_local_id_name(id, "anchor"))
         elseif id.kind == "Indexed" then
-            return Decl.Indexed(normalized_local_id_name(id.name, "ref"), id.index)
+            return Decl.Indexed(normalized_local_id_name(id.name, "anchor"), id.index)
         end
     end
-    error("invalid ref")
+    error("invalid anchor")
 end
 
 local function compose_scoped_id(base_id, ...)
@@ -499,15 +499,17 @@ end
 local function make_node(axis, props, leaf, children, defaults)
     props = props or {}
     defaults = defaults or {}
-    if props.ref ~= nil and props.key ~= nil then
-        error("node cannot specify both key and ref")
+    if props.anchor ~= nil and props.key ~= nil then
+        error("node cannot specify both key and anchor")
     end
+
+    local local_anchor = props.anchor
 
     local id_mode = "auto"
     local node_id = Decl.Auto
-    if props.ref ~= nil then
-        id_mode = "ref"
-        node_id = normalize_ref_id(props.ref)
+    if local_anchor ~= nil then
+        id_mode = "anchor"
+        node_id = normalize_anchor_id(local_anchor)
     elseif props.key ~= nil then
         id_mode = "key"
         node_id = normalize_id(props.key)
@@ -565,7 +567,7 @@ function M.dsl()
         return make_scope(compose_scoped_id(self, ...))
     end
 
-    function Scope:ref(...)
+    function Scope:anchor(...)
         return Decl.FloatById(compose_scoped_id(self, ...))
     end
 
@@ -1067,7 +1069,7 @@ function M.dsl()
             end
 
             local viewport_props = {
-                ref = "viewport",
+                anchor = "viewport",
                 width = ui.grow(),
                 height = ui.grow(),
                 horizontal = horizontal,

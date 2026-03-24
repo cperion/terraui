@@ -359,7 +359,7 @@ local preview = card:child("preview")
 - scope handles are DSL-only values
 - scope handles are accepted anywhere a public `key` is accepted
 - `scope:child(name, ...)` returns another scope handle
-- `scope:ref(name, ...)` returns `Decl.FloatById` for a local target under that scope
+- `scope:anchor(name, ...)` returns `Decl.FloatById` for a local target under that scope
 
 ## 5.7 `ui.use(name) { props } { children }`
 
@@ -368,7 +368,7 @@ local preview = card:child("preview")
 local card = ui.scope("card1")
 
 ui.use("Card") { key = card, title = "Inspector" } {
-    ui.label { ref = "body", text = "Body" },
+    ui.label { anchor = "body", text = "Body" },
 }
 ```
 
@@ -406,7 +406,7 @@ Leaf constructors consume one props record and return one `Decl.Node`.
 - `text`
 
 ### Common optional props
-- `key` or `ref` (mutually exclusive)
+- `key` or `anchor` (mutually exclusive)
 - `color`
 - `font_id`
 - `font_size`
@@ -475,7 +475,7 @@ Returns one node with:
 - `image`
 
 ### Optional props
-- `key` or `ref` (mutually exclusive)
+- `key` or `anchor` (mutually exclusive)
 - `fit`
 - `tint`
 - `aspect_ratio`
@@ -498,7 +498,7 @@ Returns one node with:
 ## 6.4 `ui.spacer { props }`
 
 ### Optional props
-- `key` or `ref` (mutually exclusive)
+- `key` or `anchor` (mutually exclusive)
 - `width`
 - `height`
 

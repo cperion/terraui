@@ -259,14 +259,14 @@ do
     assert(nested:key().kind == "Stable")
     assert(nested:key().name == "card1/preview/header")
 
-    local ft = card_scope:ref("preview")
+    local ft = card_scope:anchor("preview")
     assert(ft.kind == "FloatById")
     assert(ft.id.kind == "Stable")
     assert(ft.id.name == "card1/preview")
 
     local decl = ui.component("scope_ids") {
         root = ui.column { key = card_scope } {
-            ui.label { ref = "preview", text = "Preview" },
+            ui.label { anchor = "preview", text = "Preview" },
         },
     }
     local bound = terraui.bind(decl)

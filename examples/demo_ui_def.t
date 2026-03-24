@@ -483,7 +483,7 @@ local decl = ui.component("sdl_gl_demo") {
                 ui.use(PreviewCard) { key = preview_card } {
                     media = {
                         ui.image_view {
-                            ref = "preview",
+                            anchor = "preview",
                             image = ui.param_ref("preview_image"),
                             width = ui.fixed(520),
                             height = ui.fixed(300),
@@ -494,7 +494,7 @@ local decl = ui.component("sdl_gl_demo") {
                         ui.custom {
                             key = ui.stable("preview_overlay"),
                             kind = "preview_guides",
-                            target = preview_card:ref("preview"),
+                            target = preview_card:anchor("preview"),
                             element_point = ui.attach.left_top,
                             parent_point = ui.attach.left_top,
                             width = ui.fixed(520),
@@ -545,7 +545,7 @@ local decl = ui.component("sdl_gl_demo") {
 
                 ui.tooltip {
                     key = ui.stable("tooltip"),
-                    target = preview_card:ref("preview"),
+                    target = preview_card:anchor("preview"),
                     element_point = ui.attach.left_bottom,
                     parent_point = ui.attach.right_top,
                     offset_x = 12,
