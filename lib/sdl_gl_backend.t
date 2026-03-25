@@ -417,7 +417,9 @@ local new_backend = terralib.memoize(function(font_path)
         end
 
         draw_x = C.floorf(draw_x)
-        var draw_y = C.floorf(cmd.y)
+        -- Vertically center text within its content box so labels and
+        -- buttons with explicit heights don't push text to the top edge.
+        var draw_y = C.floorf(cmd.y + (cmd.h - [float](h)) * 0.5f)
         draw_textured_quad(tex, draw_x, draw_y, [float](w), [float](h), color(1.0f, 1.0f, 1.0f, 1.0f))
     end
 
