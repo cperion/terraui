@@ -188,6 +188,7 @@ local schema TerraUI
         flags Axis
             Row
             Column
+            Stack
         end
 
         flags AlignX

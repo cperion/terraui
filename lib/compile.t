@@ -941,7 +941,9 @@ function CompileCtx:emit_height_measure(node)
 
     local child_count = #children
     if child_count > 0 then
-        if node.axis == Decl.Row then
+        if node.axis == Decl.Row or node.axis == Decl.Stack then
+            -- Row: height is cross-axis → take max
+            -- Stack: all children overlap → take max
             for _, child in ipairs(children) do
                 local ci = child.index
                 local mh = measure_rule_size(child.height, `[frame].nodes[ci].want_h, self)
@@ -997,6 +999,46 @@ function CompileCtx:emit_children_placement(parent)
     local plan  = self.plan
     local stmts = terralib.newlist()
 
+    local children = self:flow_children(parent)
+
+    -- Stack axis: all children overlap at the parent content origin,
+    -- each receiving the full parent content dimensions.
+    if parent.axis == Decl.Stack then
+        local cx = symbol(float, "cx" .. pi)
+        local cy = symbol(float, "cy" .. pi)
+        local cw = symbol(float, "cw" .. pi)
+        local ch = symbol(float, "ch" .. pi)
+        stmts:insert(quote
+            var [cx] = [frame].nodes[pi].content_x
+            var [cy] = [frame].nodes[pi].content_y
+            var [cw] = [frame].nodes[pi].content_w
+            var [ch] = [frame].nodes[pi].content_h
+        end)
+
+        for _, child in ipairs(children) do
+            local ci_node = child.index
+            local child_w = resolve_size(child.width, cw, `[frame].nodes[ci_node].want_w, self)
+            local child_h = resolve_size(child.height, ch, `[frame].nodes[ci_node].want_h, self)
+            local cw_final, ch_final = apply_aspect_ratio(child, child_w, child_h, self)
+
+            stmts:insert(quote
+                [frame].nodes[ci_node].x = [cx]
+                [frame].nodes[ci_node].y = [cy]
+                [frame].nodes[ci_node].w = [cw_final]
+                [frame].nodes[ci_node].h = [ch_final]
+            end)
+            stmts:insert(self:emit_node_content_box(child))
+            stmts:insert(quote
+                [frame].nodes[ci_node].clip_x0 = [frame].nodes[pi].clip_x0
+                [frame].nodes[ci_node].clip_y0 = [frame].nodes[pi].clip_y0
+                [frame].nodes[ci_node].clip_x1 = [frame].nodes[pi].clip_x1
+                [frame].nodes[ci_node].clip_y1 = [frame].nodes[pi].clip_y1
+            end)
+        end
+        return stmts
+    end
+
+    -- Row / Column placement
     local gap_v = parent.gap:compile_number(self)
     local is_row = (parent.axis == Decl.Row)
 
@@ -1011,8 +1053,6 @@ function CompileCtx:emit_children_placement(parent)
         var [cw] = [frame].nodes[pi].content_w
         var [ch] = [frame].nodes[pi].content_h
     end)
-
-    local children = self:flow_children(parent)
 
     local avail_main  = is_row and cw or ch
     local avail_cross = is_row and ch or cw

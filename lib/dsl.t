@@ -581,7 +581,7 @@ function M.dsl()
         any = Decl.TAny,
     }
 
-    ui.axis = { row = Decl.Row, column = Decl.Column }
+    ui.axis = { row = Decl.Row, column = Decl.Column, stack = Decl.Stack }
     ui.align_x = { left = Decl.AlignLeft, center = Decl.AlignCenterX, right = Decl.AlignRight }
     ui.align_y = { top = Decl.AlignTop, center = Decl.AlignCenterY, bottom = Decl.AlignBottom }
     ui.wrap = { words = Decl.WrapWords, newlines = Decl.WrapNewlines, none = Decl.WrapNone }
@@ -926,7 +926,14 @@ function M.dsl()
         end
     end
 
-    ui.stack = ui.column
+    ui.stack = function(props)
+        return function(children)
+            return make_node(Decl.Stack, props, nil, children, {
+                width = Decl.Grow(nil, nil),
+                height = Decl.Grow(nil, nil),
+            })
+        end
+    end
 
     ui.scroll_region = function(props)
         props = props or {}
