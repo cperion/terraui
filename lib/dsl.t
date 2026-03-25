@@ -1142,6 +1142,8 @@ function M.dsl()
 
     ui.button = function(props)
         props = props or {}
+        -- Buttons center their text by default (labels stay left-aligned).
+        if props.text_align == nil then props.text_align = Decl.TextAlignCenter end
         local leaf = Decl.Text(Decl.TextLeaf(
             M.as_expr(assert(props.text, "button.text required")),
             text_style(props)))
