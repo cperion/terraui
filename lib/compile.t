@@ -232,6 +232,7 @@ struct ScissorCmd {
 struct CustomCmd {
     x: float; y: float; w: float; h: float
     kind: rawstring
+    color: Color
     z: float
     seq: uint32
 }
@@ -1736,6 +1737,7 @@ function Plan.CustomSpec:compile_emit(ctx)
     local frame = ctx.frame_sym
     local z = node_z_binding(ctx, self.node_index)
     local kind = self.kind
+    local color_q = self.payload and self.payload:compile_color(ctx) or `Color { 1.0f, 1.0f, 1.0f, 1.0f }
     return quote
         if [frame].nodes[self.node_index].visible then
             var idx = [frame].custom_count
@@ -1744,6 +1746,7 @@ function Plan.CustomSpec:compile_emit(ctx)
             [frame].customs[idx].w = [frame].nodes[self.node_index].w
             [frame].customs[idx].h = [frame].nodes[self.node_index].h
             [frame].customs[idx].kind = kind
+            [frame].customs[idx].color = [color_q]
             [frame].customs[idx].z = [z]
             [frame].customs[idx].seq = [frame].draw_seq
             [frame].custom_count = idx + 1
