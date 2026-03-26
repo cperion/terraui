@@ -530,7 +530,7 @@ do
                     "Card",
                     List{ Decl.PropArg("title", Decl.StringLit("Inspector")) },
                     List(),
-                    List{ Decl.SlotArg("children", child_list { make_label("body", "Hello") }) }))
+                    List{ Decl.SlotArg("children", child_list { make_label("body", "Hello") }) }, nil))
             }),
         List{ card })
 
@@ -584,8 +584,8 @@ do
             no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil,
             child_list {
-                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m1"), "Meter", List(), List(), List())),
-                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m2"), "Meter", List(), List(), List())),
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m1"), "Meter", List(), List(), List(), nil)),
+                Decl.WidgetChild(Decl.WidgetCall(Decl.Stable("m2"), "Meter", List(), List(), List(), nil)),
             }),
         List{ meter })
 
@@ -637,7 +637,8 @@ do
                     "TypedCard",
                     List{ Decl.PropArg("title", Decl.ParamRef("count")) },
                     List(),
-                    List()))
+                    List(),
+                    nil))
             }),
         List{ card })
 
@@ -696,18 +697,15 @@ do
             no_vis(), fit_layout(), no_decor(),
             nil, nil, no_input(), nil, nil,
             child_list {
-                Decl.WidgetChild((function()
-                    local call = Decl.WidgetCall(
+                Decl.WidgetChild(Decl.WidgetCall(
                         Decl.Stable("badge1"),
                         "Badge",
                         List{ Decl.PropArg("text", Decl.StringLit("Hello")) },
                         List{ Decl.PartStyleArg("root", Decl.StylePatch(
                             Decl.ColorLit(1, 0, 0, 1), nil, nil, nil,
                             nil, nil, nil, nil, nil, nil, nil, nil)) },
-                        List())
-                    rawset(call, "_terraui_theme_scope", Decl.ThemeScope("dark", List()))
-                    return call
-                end)()),
+                        List(),
+                        Decl.ThemeScope("dark", List()))),
             }))
 
     local bound = bind.bind_component(comp)

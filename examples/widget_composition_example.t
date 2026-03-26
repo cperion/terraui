@@ -139,7 +139,7 @@ assert(names["workspace/preview/gap"])
 
 local kernel = terraui.compile(decl)
 local Frame = kernel:frame_type()
-local run_q = kernel.kernels.run_fn
+local run_q = kernel.run_fn
 local test = terra()
     var f : Frame
     f.viewport_w = 640

@@ -73,11 +73,11 @@ local bound = bind.bind_component(decl, { text_backend = sdl.text_backend })
 local planned = plan.plan_component(bound)
 local kernel = compile.compile_component(planned, { text_backend = sdl.text_backend })
 local Frame = kernel:frame_type()
-local init_q = kernel.kernels.init_fn
-local layout_q = kernel.kernels.layout_fn
-local hit_test_q = kernel.kernels.hit_test_fn
-local input_q = kernel.kernels.input_fn
-local run_q = kernel.kernels.run_fn
+local init_q = kernel.init_fn
+local layout_q = kernel.run_fn
+local hit_test_q = kernel.run_fn
+local input_q = kernel.run_fn
+local run_q = kernel.run_fn
 
 local max_packets = #planned.paints + #planned.texts + #planned.images + (#planned.clips * 2) + #planned.customs
 if max_packets < 1 then max_packets = 1 end

@@ -536,8 +536,8 @@ local function make_node(axis, props, leaf, children, defaults)
         no_input(props, defaults.input),
         props.aspect_ratio and M.as_expr(props.aspect_ratio) or nil,
         leaf,
-        normalize_children(children))
-    rawset(node, "_terraui_id_mode", id_mode)
+        normalize_children(children),
+        id_mode)
     return node
 end
 
@@ -803,7 +803,7 @@ function M.dsl()
                 if is_decl_node(child) then
                     child.theme_scope = scope
                 elseif is_decl_widget_call(child) then
-                    rawset(child, "_terraui_theme_scope", scope)
+                    child.theme_scope = scope
                 end
             end
             return ui.fragment(items)
@@ -881,7 +881,7 @@ function M.dsl()
                 for _, k in ipairs(style_names) do
                     style_args:insert(Decl.PartStyleArg(k, normalize_style_patch(props.styles[k])))
                 end
-                return Decl.WidgetCall(props.key and normalize_id(props.key) or nil, name, prop_args, style_args, slot_args)
+                return Decl.WidgetCall(props.key and normalize_id(props.key) or nil, name, prop_args, style_args, slot_args, nil)
             end
         end
     end

@@ -42,6 +42,45 @@ end
 expect_parse_error([[
 import "lib/schema"
 local schema Bad
+    doc = "schema doc"
+    phase Decl
+        doc = "phase doc"
+        record R
+            a: number
+        end
+    end
+end
+]], "record 'Decl%.R' must declare non%-empty doc")
+
+expect_parse_error([[
+import "lib/schema"
+local schema Bad
+    note = "legacy"
+    phase Decl
+        record R
+            a: number
+        end
+    end
+end
+]], "expected doc, extern, phase, hooks, or end inside schema")
+
+expect_parse_error([[
+import "lib/schema"
+local schema Bad
+    doc = "schema doc"
+    hooks X
+        doc = "hooks doc"
+        methodmissing
+            doc = "bad"
+            impl = function() end
+        end
+    end
+end
+]], "hook 'methodmissing' in hooks 'X' must declare macro")
+
+expect_parse_error([[
+import "lib/schema"
+local schema Bad
     phase Source
         record Node
             id: string

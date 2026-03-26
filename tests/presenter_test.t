@@ -8,8 +8,8 @@ local Decl = terraui.types.Decl
 
 local function run_frame(kernel, vw, vh)
     local Frame = kernel:frame_type()
-    local init_q = kernel.kernels.init_fn
-    local run_q = kernel.kernels.run_fn
+    local init_q = kernel.init_fn
+    local run_q = kernel.run_fn
     local mk = terra(vw: float, vh: float)
         var f : Frame
         [init_q](&f)

@@ -95,14 +95,11 @@ do
         make_node("root", Decl.Column,
             Decl.Grow(nil, nil), Decl.Grow(nil, nil))))
 
-    assert(terralib.types.istype(k.types.params_t))
-    assert(terralib.types.istype(k.types.state_t))
-    assert(terralib.types.istype(k.types.frame_t))
-    assert(terralib.types.istype(k.types.node_t))
-    assert(terralib.types.istype(k.types.input_t))
-    assert(terralib.types.istype(k.types.hit_t))
-    assert(k:frame_type() == k.types.frame_t)
-    assert(terralib.isquote(k:run_quote()))
+    assert(terralib.types.istype(k.frame_t), "frame_t is a type")
+    assert(k:frame_type() == k.frame_t, "frame_type() matches")
+    assert(terralib.isquote(k.init_fn), "init_fn is a quote")
+    assert(terralib.isquote(k.run_fn), "run_fn is a quote")
+    assert(terralib.isquote(k:run_quote()), "run_quote() works")
 
     print("  test 1 (types generated): ok")
 end
@@ -124,8 +121,8 @@ do
                     Decl.Grow(nil, nil), Decl.Fixed(Decl.NumLit(50))),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -171,8 +168,8 @@ do
                     Decl.Grow(nil, nil), Decl.Fixed(Decl.NumLit(50))),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -204,8 +201,8 @@ do
                     Decl.Fixed(Decl.NumLit(300)), Decl.Grow(nil, nil)),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -244,8 +241,8 @@ do
                     Decl.Grow(nil, nil), Decl.Grow(nil, nil)),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -288,8 +285,8 @@ do
                     Decl.Grow(nil, nil), Decl.Fixed(Decl.NumLit(40))),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -325,8 +322,8 @@ do
                     Decl.Fixed(Decl.ParamRef("h"))),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -360,8 +357,8 @@ do
                     Decl.Grow(nil, nil)),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -405,8 +402,8 @@ do
                     Decl.Grow(nil, nil), Decl.Grow(nil, nil)),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -452,8 +449,8 @@ do
                             Decl.NumLit(10)))),
             })))
 
-    local Frame = k.types.frame_t
-    local layout_q = k.kernels.layout_fn
+    local Frame = k.frame_t
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -480,8 +477,8 @@ do
             Decl.Grow(nil, nil), Decl.Grow(nil, nil))))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local layout_q = k.kernels.layout_fn
+    local init_q = k.init_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -523,7 +520,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -564,7 +561,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -605,7 +602,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -646,7 +643,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -683,7 +680,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -723,7 +720,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -763,8 +760,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local layout_q = k.kernels.layout_fn
+    local init_q = k.init_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -806,8 +803,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -866,7 +863,7 @@ do
             })))
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -925,9 +922,9 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local layout_q = k.kernels.layout_fn
-    local hit_q = k.kernels.hit_test_fn
+    local init_q = k.init_fn
+    local layout_q = k.run_fn
+    local hit_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -971,8 +968,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1036,8 +1033,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1079,8 +1076,8 @@ do
             nil, nil, no_input(), nil, nil, List())))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1144,8 +1141,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1199,8 +1196,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1251,8 +1248,8 @@ do
             })))
 
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
 
     local test = terra()
         var f : Frame
@@ -1305,7 +1302,7 @@ do
         { text_backend = custom_text_backend })
 
     local Frame = k:frame_type()
-    local layout_q = k.kernels.layout_fn
+    local layout_q = k.run_fn
 
     local test = terra()
         var f : Frame

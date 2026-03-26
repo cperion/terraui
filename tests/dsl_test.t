@@ -188,7 +188,7 @@ do
 
     local k = terraui.compile(decl)
     local Frame = k:frame_type()
-    local run_q = k.kernels.run_fn
+    local run_q = k.run_fn
     local test = terra()
         var f : Frame
         f.viewport_w = 200; f.viewport_h = 120
@@ -301,8 +301,8 @@ do
 
     local k = terraui.compile(decl)
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
     local test = terra()
         var f : Frame
         [init_q](&f)
@@ -352,8 +352,8 @@ do
 
     local k = terraui.compile(decl)
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
     local test = terra()
         var f : Frame
         [init_q](&f)
@@ -403,8 +403,8 @@ do
 
     local k = terraui.compile(decl)
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
     local test = terra()
         var f : Frame
         [init_q](&f)
@@ -448,8 +448,8 @@ do
 
     local k = terraui.compile(decl)
     local Frame = k:frame_type()
-    local init_q = k.kernels.init_fn
-    local run_q = k.kernels.run_fn
+    local init_q = k.init_fn
+    local run_q = k.run_fn
     local test = terra()
         var f : Frame
         [init_q](&f)
@@ -566,7 +566,7 @@ do
     assert(terralib.types.istype(k1:frame_type()))
 
     local Frame = k1:frame_type()
-    local run_q = k1.kernels.run_fn
+    local run_q = k1.run_fn
     local test = terra()
         var f : Frame
         f.viewport_w = 200; f.viewport_h = 200
